@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <style>
+    .frame { fill: #ffffff; stroke: #e7e5e4; }
+    @media (prefers-color-scheme: dark) {
+      .frame { fill: #1c1917; stroke: #44403c; }
+    }
+  </style>
+  <defs>
+    <clipPath id="rounded-logo">
+      <rect x="5" y="5" width="54" height="54" rx="15" />
+    </clipPath>
+  </defs>
+  <rect class="frame" x="1.5" y="1.5" width="61" height="61" rx="18" stroke-width="1.5" />
+  <image href="/logo.png" x="5" y="5" width="54" height="54" preserveAspectRatio="xMidYMid meet" clip-path="url(#rounded-logo)" />
+</svg>

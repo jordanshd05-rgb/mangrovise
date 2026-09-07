@@ -980,7 +980,7 @@ const finalTotal = useMemo(() => {
         )}
 
         {currentTab === "seller-dashboard" && isSeller && (
-          <SellerDashboard />
+          <SellerDashboard triggerToast={triggerToast} />
         )}
 
         {currentTab === "seller-dashboard" && !isSeller && (

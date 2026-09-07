@@ -957,9 +957,29 @@ useEffect(() => {
                   </motion.button>
                 )}
 
-                {user && (
+                {user && isAdmin && (
                   <motion.button
                     custom={4}
+                    variants={menuItemVariants}
+                    initial="hidden"
+                    animate="show"
+                    onClick={() => {
+                      onOpenAdminDashboard();
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className="flex items-center justify-between w-full px-4 py-3 rounded-2xl bg-white/5 text-white hover:bg-white/10 hover:translate-x-2 duration-200 transition-all"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Sparkles className="w-5 h-5" />
+                      <span>Dashboard Admin</span>
+                    </div>
+                    <ChevronRight className="w-4 h-4 opacity-60" />
+                  </motion.button>
+                )}
+
+                {user && (
+                  <motion.button
+                    custom={5}
                     variants={menuItemVariants}
                     initial="hidden"
                     animate="show"
@@ -993,29 +1013,9 @@ useEffect(() => {
                   </motion.button>
                 )}
 
-                {user && role === "admin" && (
-                  <motion.button
-                    custom={6}
-                    variants={menuItemVariants}
-                    initial="hidden"
-                    animate="show"
-                    onClick={() => {
-                      onOpenAdminDashboard();
-                      setIsMobileMenuOpen(false);
-                    }}
-                    className="flex items-center justify-between w-full px-4 py-3 rounded-2xl bg-white/5 text-white hover:bg-white/10 hover:translate-x-2 duration-200 transition-all"
-                  >
-                    <div className="flex items-center gap-3">
-                      <Sparkles className="w-5 h-5" />
-                      <span>Dashboard Admin</span>
-                    </div>
-                    <ChevronRight className="w-4 h-4 opacity-60" />
-                  </motion.button>
-                )}
-
                 {user && (
                   <motion.button
-                    custom={5}
+                    custom={6}
                     variants={menuItemVariants}
                     initial="hidden"
                     animate="show"

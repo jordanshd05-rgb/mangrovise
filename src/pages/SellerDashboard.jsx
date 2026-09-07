@@ -82,10 +82,20 @@ const initialForm = {
   imageUrl: "",
 };
 
-export default function SellerDashboard() {
+const initialStoreProfile = {
+  name: "",
+  description: "",
+  address: "",
+  phone: "",
+};
+
+export default function SellerDashboard({ triggerToast }) {
   const { firebaseUser, isSeller } = useAuth();
   const [products, setProducts] = useState([]);
   const [storeStatus, setStoreStatus] = useState(null);
+  const [storeProfile, setStoreProfile] = useState(initialStoreProfile);
+  const [isStoreProfileOpen, setIsStoreProfileOpen] = useState(false);
+  const [savingStoreProfile, setSavingStoreProfile] = useState(false);
   const [form, setForm] = useState(initialForm);
   const [localPreviewUrl, setLocalPreviewUrl] = useState("");
   const [uploadedPreviewUrl, setUploadedPreviewUrl] = useState("");
@@ -128,18 +138,68 @@ export default function SellerDashboard() {
   useEffect(() => {
     if (!firebaseUser || !isSeller) {
       setStoreStatus(null);
+      setStoreProfile(initialStoreProfile);
       return undefined;
     }
 
     return onSnapshot(
       doc(firestore, "stores", firebaseUser.uid),
-      (snapshot) => setStoreStatus(snapshot.exists() ? snapshot.data().status || "active" : null),
+      (snapshot) => {
+        if (!snapshot.exists()) {
+          setStoreStatus(null);
+          return;
+        }
+
+        const store = snapshot.data();
+        setStoreStatus(store.status || "active");
+        setStoreProfile({
+          name: store.name || "",
+          description: store.description || "",
+          address: store.address || "",
+          phone: store.phone || "",
+        });
+      },
       (statusError) => {
         console.error("Loading seller store status failed:", statusError);
         setStoreStatus(null);
       }
     );
   }, [firebaseUser, isSeller]);
+
+  const handleStoreProfileChange = (event) => {
+    const { name, value } = event.target;
+    setStoreProfile((current) => ({ ...current, [name]: value }));
+  };
+
+  const handleSubmitStoreProfile = async (event) => {
+    event.preventDefault();
+    setError("");
+
+    if (!firebaseUser || !isSeller) {
+      setError("Anda tidak memiliki akses seller.");
+      return;
+    }
+
+    setSavingStoreProfile(true);
+
+    try {
+      await updateDoc(doc(firestore, "stores", firebaseUser.uid), {
+        name: storeProfile.name.trim(),
+        description: storeProfile.description.trim(),
+        address: storeProfile.address.trim(),
+        phone: storeProfile.phone.trim(),
+        updatedAt: serverTimestamp(),
+      });
+      setIsStoreProfileOpen(false);
+      triggerToast?.("Deskripsi toko berhasil diperbarui", "success");
+    } catch (profileError) {
+      console.error("Updating seller store profile failed:", profileError);
+      setError("Profil toko gagal diperbarui. Periksa koneksi dan coba lagi.");
+      triggerToast?.("Profil toko gagal diperbarui", "error");
+    } finally {
+      setSavingStoreProfile(false);
+    }
+  };
 
   const resetForm = () => {
     setForm(initialForm);
@@ -292,7 +352,46 @@ export default function SellerDashboard() {
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-accent-ochre">Seller Center</p>
         <h1 className="mt-2 text-3xl font-serif font-bold text-mangrove-deep">Dashboard Toko</h1>
         <p className="mt-2 text-sm text-stone-500">Kelola katalog produk yang dimiliki akun seller Anda.</p>
+        <button type="button" onClick={() => setIsStoreProfileOpen(true)} className="mt-4 rounded-xl bg-accent-ochre px-5 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-accent-ochre/90">
+          Edit Profil Toko
+        </button>
       </div>
+
+      {isStoreProfileOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/50 p-4" role="dialog" aria-modal="true" aria-labelledby="store-profile-title">
+          <form onSubmit={handleSubmitStoreProfile} className="max-h-[90vh] w-full max-w-2xl space-y-5 overflow-y-auto rounded-3xl bg-white p-6 shadow-xl sm:p-8">
+            <div>
+              <h2 id="store-profile-title" className="text-2xl font-serif font-bold text-mangrove-deep">Edit Profil Toko</h2>
+              <p className="mt-1 text-sm text-stone-500">Perbarui informasi yang tampil pada profil toko Anda.</p>
+            </div>
+            <label className="block space-y-2 text-sm font-semibold text-stone-700">
+              Nama Toko
+              <input name="name" value={storeProfile.name} onChange={handleStoreProfileChange} required className="w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 font-normal outline-none focus:border-accent-ochre" />
+            </label>
+            <label className="block space-y-2 text-sm font-semibold text-stone-700">
+              Deskripsi Toko
+              <textarea name="description" value={storeProfile.description} onChange={handleStoreProfileChange} required rows="4" className="w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 font-normal outline-none focus:border-accent-ochre" />
+            </label>
+            <div className="grid gap-5 sm:grid-cols-2">
+              <label className="space-y-2 text-sm font-semibold text-stone-700">
+                Alamat Toko
+                <input name="address" value={storeProfile.address} onChange={handleStoreProfileChange} required className="w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 font-normal outline-none focus:border-accent-ochre" />
+              </label>
+              <label className="space-y-2 text-sm font-semibold text-stone-700">
+                Nomor Kontak / WhatsApp
+                <input name="phone" value={storeProfile.phone} onChange={handleStoreProfileChange} required type="tel" className="w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 font-normal outline-none focus:border-accent-ochre" />
+              </label>
+            </div>
+            {error && <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button type="button" onClick={() => setIsStoreProfileOpen(false)} disabled={savingStoreProfile} className="rounded-xl border border-stone-200 px-5 py-3 text-sm font-bold text-stone-600 disabled:cursor-not-allowed disabled:opacity-60">Batal</button>
+              <button type="submit" disabled={savingStoreProfile} className="rounded-xl bg-mangrove-deep px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60">
+                {savingStoreProfile ? "Menyimpan..." : "Simpan Profil Toko"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {storeStatus === "pending" && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">

@@ -2,7 +2,7 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, Suspense, lazy } from "react";
 import { auth, db, firestore } from "./firebase";
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
 import { ref as dbRef, set as dbSet, push as dbPush, onValue as dbOnValue, get as dbGet, update as dbUpdate} from "firebase/database";
@@ -27,13 +27,18 @@ import ProductDetailModal from "./components/ProductDetailModal";
 import CheckoutModal from "./components/CheckoutModal";
 import LoginModal from "./components/LoginModal";
 import Navbar from "./components/Navbar";
-import RegisterSeller from "./pages/RegisterSeller";
-import SellerDashboard from "./pages/SellerDashboard";
-import AdminDashboard from "./pages/AdminDashboard";
-import UserProfile from "./pages/UserProfile";
+const RegisterSeller = lazy(() => import("./pages/RegisterSeller"));
+const SellerDashboard = lazy(() => import("./pages/SellerDashboard"));
+const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
+const UserProfile = lazy(() => import("./pages/UserProfile"));
 
 const ADMIN_EMAILS = ["admin@mangrovise.store"];
 const ACTIVE_PRODUCT_CATEGORIES = ["Makanan", "Minuman"];
+const pageLoader = (
+  <div className="flex min-h-[40vh] items-center justify-center text-sm font-semibold text-stone-500">
+    Memuat halaman...
+  </div>
+);
 
 export const ASSET_CONFIG = {
   logo: {
@@ -167,13 +172,13 @@ export const ASSET_CONFIG = {
 };
 export default function App() {
   const { role, isSeller, firebaseUser } = useAuth();
+  const user = firebaseUser;
   const isAdmin = role === "admin" || ADMIN_EMAILS.includes(firebaseUser?.email?.toLowerCase());
   const [currentTab, setCurrentTab] = useState("beranda");
   const [liveProducts, setLiveProducts] = useState([]);
   const [storeStatusRevision, setStoreStatusRevision] = useState(0);
   const [productsLoading, setProductsLoading] = useState(true);
   const [productsError, setProductsError] = useState("");
-  const [user, setUser] = useState(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -194,6 +199,20 @@ export default function App() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [cartStep, setCartStep] = useState(1);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [logoFailed, setLogoFailed] = useState(false);
+  const tabScrollTimerRef = useRef(null);
+  const paymentTimerRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (tabScrollTimerRef.current) {
+        clearTimeout(tabScrollTimerRef.current);
+      }
+      if (paymentTimerRef.current) {
+        clearTimeout(paymentTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     return onSnapshot(collection(firestore, "stores"), () => {
@@ -271,14 +290,16 @@ export default function App() {
   };
 
   useEffect(() => {
-  if ("scrollRestoration" in window.history) {
-    window.history.scrollRestoration = "manual";
-  }
+    if ("scrollRestoration" in window.history) {
+      window.history.scrollRestoration = "manual";
+    }
 
-  setTimeout(() => {
-    window.scrollTo(0, 0);
-  }, 0);
-}, []);
+    const scrollTimer = setTimeout(() => {
+      window.scrollTo(0, 0);
+    }, 0);
+
+    return () => clearTimeout(scrollTimer);
+  }, []);
 
   useEffect(() => {
     setCurrentTab("beranda");
@@ -293,21 +314,17 @@ export default function App() {
 }, [currentTab]);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      if (!currentUser) {
-        setCart([]);
-        setShippingAddress({
-          recipientName: "",
-          phone: "",
-          provinceCity: "",
-          addressDetails: "",
-          postalCode: ""
-        });
-      }
-    });
-    return () => unsubscribe();
-  }, []);
+    if (!user) {
+      setCart([]);
+      setShippingAddress({
+        recipientName: "",
+        phone: "",
+        provinceCity: "",
+        addressDetails: "",
+        postalCode: ""
+      });
+    }
+  }, [user]);
 
   useEffect(() => {
     if (!user) {
@@ -331,39 +348,37 @@ export default function App() {
   }, [user]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setShippingAddress({
+        recipientName: "",
+        phone: "",
+        provinceCity: "",
+        addressDetails: "",
+        postalCode: ""
+      });
+      return undefined;
+    }
+
     const addressRef = dbRef(db, `users/${user.uid}/profile/address`);
     const unsubscribe = dbOnValue(addressRef, (snapshot) => {
       const data = snapshot.val();
-      if (data) {
-        setShippingAddress({
-          recipientName: data.recipientName || "",
-          phone: data.phone || "",
-          provinceCity: data.provinceCity || "",
-          addressDetails: data.addressDetails || "",
-          postalCode: data.postalCode || ""
-        });
-      }
-    });
-    return () => unsubscribe();
-  }, [user]);
-
-  useEffect(() => {
-    if (!user) return;
-
-    const userProfileRef = firestoreDoc(firestore, "users", user.uid);
-    const unsubscribe = onSnapshot(userProfileRef, (snapshot) => {
-      const savedAddress = snapshot.data()?.address;
-
-      if (savedAddress) {
-        setShippingAddress({
-          recipientName: savedAddress.recipientName || "",
-          phone: savedAddress.phone || "",
-          provinceCity: savedAddress.provinceCity || "",
-          addressDetails: savedAddress.addressDetails || "",
-          postalCode: savedAddress.postalCode || "",
-        });
-      }
+      setShippingAddress(
+        data
+          ? {
+              recipientName: data.recipientName || "",
+              phone: data.phone || "",
+              provinceCity: data.provinceCity || "",
+              addressDetails: data.addressDetails || "",
+              postalCode: data.postalCode || "",
+            }
+          : {
+              recipientName: "",
+              phone: "",
+              provinceCity: "",
+              addressDetails: "",
+              postalCode: "",
+            }
+      );
     });
 
     return () => unsubscribe();
@@ -485,7 +500,6 @@ export default function App() {
       );
       setShowLoginModal(false);
       setShowUserMenu(false);
-      setAuthError("");
       setEmail("");
       setPassword("");
       setShippingAddress(emptyShippingAddress);
@@ -525,7 +539,12 @@ export default function App() {
   const mainContentRef = useRef(null);
   const handleTabChange = (tab) => {
     setCurrentTab(tab);
-    setTimeout(() => {
+
+    if (tabScrollTimerRef.current) {
+      clearTimeout(tabScrollTimerRef.current);
+    }
+
+    tabScrollTimerRef.current = setTimeout(() => {
       mainContentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 100);
   };
@@ -759,6 +778,9 @@ const finalTotal = useMemo(() => {
       triggerToast("Silakan pilih minimal 1 produk untuk dicheckout!", "info");
       return;
     }
+    if (paymentTimerRef.current) {
+      clearTimeout(paymentTimerRef.current);
+    }
     setCheckoutStatus("verifying");
     const orderId = generateOrderId();
     const invoiceNo = "INV/" + new Date().getFullYear() + "/MNG/" + Math.floor(1e5 + Math.random() * 9e5);
@@ -800,11 +822,10 @@ const finalTotal = useMemo(() => {
 
     carbonSaved: ecoMetrics.carbonOffset
 };
-    setTimeout(() => {
+    paymentTimerRef.current = setTimeout(() => {
       const userOrdersRef = dbRef(db, `orders/${user.uid}`);
       dbPush(userOrdersRef, orderData)
         .then(() => {
-          // Simpan/perbarui data alamat ke profil
           const profileAddressRef = dbRef(db, `users/${user.uid}/profile/address`);
           return dbSet(profileAddressRef, shippingAddress);
         })
@@ -831,7 +852,6 @@ const finalTotal = useMemo(() => {
 };
           setActiveReceipt(receipt);
           setCheckoutStatus("success");
-          // Hapus hanya produk yang dicentang dari keranjang belanja
           setCart((prev) => prev.filter((item) => item.checked === false));
           triggerToast("Pembayaran Berhasil! Pesanan Anda telah tersimpan.", "success");
         })
@@ -866,31 +886,19 @@ const finalTotal = useMemo(() => {
   const renderLogo = () => {
     return (
       <div className="flex items-center space-x-3">
-        {ASSET_CONFIG.logo.useRealLogo ? (
-          /* Jika useRealLogo true, kotak oranye ikon daun diganti dengan file gambar asli */
-          <img 
-            src={ASSET_CONFIG.logo.imagePath} 
-            alt="Mangrovise Logo Asset" 
+        {ASSET_CONFIG.logo.useRealLogo && !logoFailed ? (
+          <img
+            src={ASSET_CONFIG.logo.imagePath}
+            alt="Mangrovise Logo Asset"
             className="w-9 h-9 object-contain rounded-xl shadow-md shrink-0"
-            onError={(e) => {
-              // Jika gambar gagal dimuat, otomatis pasang fallback ikon daun
-              e.currentTarget.style.display = 'none';
-              const fallbackIcon = document.getElementById('fallback-icon');
-              if (fallbackIcon) fallbackIcon.style.display = 'flex';
-            }}
+            onError={() => setLogoFailed(true)}
           />
-        ) : null}
+        ) : (
+          <div className="w-9 h-9 bg-accent-ochre rounded-xl flex items-center justify-center text-white shrink-0 shadow-md">
+            <Leaf className="w-5 h-5 text-white animate-pulse" />
+          </div>
+        )}
 
-        {/* Kotak ikon daun bawaan (hanya muncul jika useRealLogo false, atau sebagai cadangan) */}
-        <div 
-          id="fallback-icon" 
-          className="w-9 h-9 bg-accent-ochre rounded-xl flex items-center justify-center text-white shrink-0 shadow-md"
-          style={{ display: ASSET_CONFIG.logo.useRealLogo ? 'none' : 'flex' }}
-        >
-          <Leaf className="w-5 h-5 text-white animate-pulse" />
-        </div>
-
-        {/* Teks Logo - Tidak akan hilang karena ditaruh di luar kondisi gambar */}
         <div className="text-left">
           <span className="block font-serif font-bold text-lg leading-none text-white tracking-wide">
             Mangro<span className="text-accent-ochre font-sans font-bold">Vise</span>
@@ -973,26 +981,40 @@ const finalTotal = useMemo(() => {
          <main ref={mainContentRef} className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-24">
 
         {currentTab === "register-seller" && (
-          <RegisterSeller
-            onCancel={() => handleTabChange("beranda")}
-            onSuccess={() => handleTabChange("seller-dashboard")}
-          />
+          <Suspense fallback={pageLoader}>
+            <RegisterSeller
+              onCancel={() => handleTabChange("beranda")}
+              onSuccess={() => handleTabChange("seller-dashboard")}
+            />
+          </Suspense>
         )}
 
         {currentTab === "seller-dashboard" && isSeller && (
-          <SellerDashboard triggerToast={triggerToast} />
+          <Suspense fallback={pageLoader}>
+            <SellerDashboard triggerToast={triggerToast} />
+          </Suspense>
         )}
 
         {currentTab === "seller-dashboard" && !isSeller && (
-          <RegisterSeller
-            onCancel={() => handleTabChange("beranda")}
-            onSuccess={() => handleTabChange("seller-dashboard")}
-          />
+          <Suspense fallback={pageLoader}>
+            <RegisterSeller
+              onCancel={() => handleTabChange("beranda")}
+              onSuccess={() => handleTabChange("seller-dashboard")}
+            />
+          </Suspense>
         )}
 
-        {currentTab === "admin-dashboard" && <AdminDashboard />}
+        {currentTab === "admin-dashboard" && (
+          <Suspense fallback={pageLoader}>
+            <AdminDashboard />
+          </Suspense>
+        )}
 
-        {currentTab === "user-profile" && <UserProfile />}
+        {currentTab === "user-profile" && (
+          <Suspense fallback={pageLoader}>
+            <UserProfile />
+          </Suspense>
+        )}
         
         {/* TAB 2: KATALOG */}
         {currentTab === "katalog" && (
@@ -1211,6 +1233,11 @@ finalTotal={finalTotal}
         onAddToCart={handleAddToCart}
         onBuyNow={handleInstantBuy}
         onChangeProduct={openProductDetail}
+        onRequireLogin={() => {
+          setShowLoginModal(true);
+          triggerToast("Silakan login terlebih dahulu untuk mengirim pesan", "info");
+        }}
+        triggerToast={triggerToast}
       />
     </div>
 }

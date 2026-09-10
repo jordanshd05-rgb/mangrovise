@@ -14,8 +14,10 @@ import {
   CircleCheckBig,
   TriangleAlert,
   Hammer,
-  StarHalf
+  MessageCircle,
 } from "lucide-react";
+import { useAuth } from "../context/AuthContext.jsx";
+import ChatDrawer from "./ChatDrawer";
 
 export default function ProductDetailModal({
   show,
@@ -24,11 +26,15 @@ export default function ProductDetailModal({
   onClose,
   onAddToCart,
   onBuyNow,
-  onChangeProduct
+  onChangeProduct,
+  onRequireLogin,
+  triggerToast,
 }) {
 
+  const { firebaseUser: user } = useAuth();
   const [selectedImage, setSelectedImage] = useState("");
   const [quantity, setQuantity] = useState(1);
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   useEffect(() => {
     if(product){
@@ -43,8 +49,37 @@ export default function ProductDetailModal({
 
   const totalPrice = product.price * quantity;
   const totalTrees = quantity;
+  const fallbackText = (value, fallback) => (value && String(value).trim()) ? value : fallback;
+  const kemasan = fallbackText(product.kemasan ?? product.packageSize, "1 pcs");
+  const berat = fallbackText(product.berat ?? product.weight, "Belum diisi");
+  const masaSimpan = fallbackText(product.masaSimpan ?? product.shelfLife, "Belum diisi");
+  const asalProduk = fallbackText(product.asalProduk ?? product.origin, "Kota Langsa");
+
+  const safeProduct = {
+    ...product,
+    id: product.id || product.productId || product.slug || "product-default",
+    sellerId: product.sellerId || product.userId || "admin-seller",
+  };
+
+  const seller = {
+    uid: safeProduct.sellerId,
+    id: safeProduct.sellerId,
+    name: product.storeName || "Seller",
+    storeName: product.storeName || "Seller",
+  };
+
+  const handleChatClick = () => {
+    if (!user?.uid) {
+      triggerToast?.("Silakan login terlebih dahulu untuk mengirim pesan", "info");
+      onRequireLogin?.();
+      return;
+    }
+
+    setIsChatOpen(true);
+  };
 
   return (
+    <>
     <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto lg:flex lg:items-center lg:justify-center">
       <div
         className="
@@ -79,8 +114,10 @@ export default function ProductDetailModal({
           >
             {/* Tombol Close */}
             <button
+              type="button"
               onClick={onClose}
-              className="absolute top-6 right-6 z-20 bg-white w-10 h-10 rounded-full shadow hover:bg-red-50 transition"
+              className="absolute top-6 right-6 z-30 cursor-pointer bg-white w-10 h-10 rounded-full shadow hover:bg-red-50 transition"
+              aria-label="Tutup produk"
             >
               <X className="w-5 h-5 mx-auto text-red-500" />
             </button>
@@ -276,41 +313,41 @@ export default function ProductDetailModal({
                 {product.description}
               </p>
               <hr className="my-2 border-stone-200"/>
-              <div className="grid grid grid-cols-2 gap-2 lg:gap-3 gap-2 mt-4">
-                <div className="bg-stone-100 rounded-xl p-3">
+              <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-4 lg:gap-3">
+                <div className="rounded-xl bg-stone-100 p-3">
                   <div className="flex items-center gap-2">
                     <Package className="w-4 h-4 text-mangrove-deep shrink-0" />
                     <span className="text-xs text-stone-500 font-medium">Kemasan</span>
                   </div>
-                  <p className="text-[13px] font-bold text-lg mt-2">
-                    {product.packageSize}
+                  <p className="mt-2 text-[13px] font-bold text-lg">
+                    {kemasan}
                   </p>
                 </div>
-                <div className="bg-stone-100 rounded-xl p-3">
+                <div className="rounded-xl bg-stone-100 p-3">
                   <div className="flex items-center gap-2">
                     <Scale className="w-4 h-4 text-mangrove-deep shrink-0" />
                     <span className="text-xs text-stone-500 font-medium">Berat</span>
                   </div>
-                  <p className="text-[13px] font-bold text-lg mt-2">
-                    {product.weight}
+                  <p className="mt-2 text-[13px] font-bold text-lg">
+                    {berat}
                   </p>
                 </div>
-                <div className="bg-stone-100 rounded-xl p-3">
+                <div className="rounded-xl bg-stone-100 p-3">
                   <div className="flex items-center gap-2">
                     <Clock className="w-4 h-4 text-mangrove-deep shrink-0" />
                     <span className="text-xs text-stone-500 font-medium">Masa Simpan</span>
                   </div>
-                  <p className="text-[13px] font-bold text-lg mt-2">
-                    {product.shelfLife}
+                  <p className="mt-2 text-[13px] font-bold text-lg">
+                    {masaSimpan}
                   </p>
                 </div>
-                <div className="bg-stone-100 rounded-xl p-3">
+                <div className="rounded-xl bg-stone-100 p-3">
                   <div className="flex items-center gap-2">
                     <MapPin className="w-4 h-4 text-mangrove-deep shrink-0" />
                     <span className="text-xs text-stone-500 font-medium">Asal Produk</span>
                   </div>
-                  <p className="text-[13px] font-bold text-lg mt-2">
-                    {product.origin}
+                  <p className="mt-2 text-[13px] font-bold text-lg">
+                    {asalProduk}
                   </p>
                 </div>
               </div>
@@ -397,21 +434,26 @@ export default function ProductDetailModal({
                 </span>
               </div>
             </div>
-            <div className=" z-20 bg-white/95 pt-4 mt-5 grid grid-cols-2 gap-3">
-              {/* Keranjang */}
+            <div className="z-20 mt-5 grid grid-cols-1 gap-3 bg-white/95 pt-4 sm:grid-cols-2">
+              <button
+                onClick={handleChatClick}
+                className="flex items-center justify-center gap-2 rounded-3xl border-2 border-sky-500 py-2.5 text-[14px] font-bold text-sky-600 transition-all hover:bg-sky-500 hover:text-white"
+              >
+                <MessageCircle className="h-4 w-4" />
+                Chat Seller
+              </button>
               <button
                 onClick={() => {
-                  for(let i=0;i<quantity;i++){
+                  for (let i = 0; i < quantity; i++) {
                     onAddToCart(product);
-                }
+                  }
                   onClose();
                 }}
-                className="border-2 border-mangrove-deep rounded-3xl py-1.5 text-[14px] font-bold text-mangrove-deep hover:bg-mangrove-deep hover:text-white transition-all flex items-center justify-center gap-2"
+                className="flex items-center justify-center gap-2 rounded-3xl border-2 border-mangrove-deep py-2.5 text-[14px] font-bold text-mangrove-deep transition-all hover:bg-mangrove-deep hover:text-white"
               >
-                <ShoppingCart className="w-5 h-5"/>
+                <ShoppingCart className="h-5 w-5" />
                 Keranjang
               </button>
-              {/* Beli */}
               <button
                 onClick={() => {
                   for (let i = 0; i < quantity; i++) {
@@ -420,25 +462,25 @@ export default function ProductDetailModal({
                   onClose();
                 }}
                 className="
-                  bg-accent-ochre
-                  rounded-3xl
-                  py-2.5
-                  text-white
-                  font-bold
-                  hover:scale-[1.02]
-                  transition-all
-                  shadow-lg
+                  col-span-1
                   flex
                   items-center
                   justify-center
                   gap-3
+                  rounded-3xl
+                  bg-accent-ochre
+                  py-2.5
+                  text-white
+                  font-bold
+                  shadow-lg
+                  transition-all
+                  hover:scale-[1.02]
+                  sm:col-span-2
                 "
               >
                 <span className="text-lg">⚡</span>
                 <div className="flex flex-col leading-tight text-left">
-                  <span className="text-[14px] font-bold">
-                    Beli Sekarang
-                  </span>
+                  <span className="text-[14px] font-bold">Beli Sekarang</span>
                   <span className="text-[11px] text-white/80 font-medium">
                     Rp {totalPrice.toLocaleString("id-ID")}
                   </span>
@@ -489,5 +531,18 @@ export default function ProductDetailModal({
         </div>
       </div>
     </div>
+    <ChatDrawer
+      isOpen={isChatOpen}
+      onClose={() => setIsChatOpen(false)}
+      product={safeProduct}
+      seller={seller}
+      productId={safeProduct.id}
+      sellerId={safeProduct.sellerId}
+      onRequireLogin={() => {
+        triggerToast?.("Silakan login terlebih dahulu untuk mengirim pesan", "info");
+        onRequireLogin?.();
+      }}
+    />
+    </>
   );
 }

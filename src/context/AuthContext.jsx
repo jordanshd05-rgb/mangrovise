@@ -11,15 +11,16 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let unsubscribeProfile;
+    let unsubscribeProfile = null;
+    let isActive = true;
 
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+      if (!isActive) return;
+
       setFirebaseUser(currentUser);
 
-      if (unsubscribeProfile) {
-        unsubscribeProfile();
-        unsubscribeProfile = null;
-      }
+      unsubscribeProfile?.();
+      unsubscribeProfile = null;
 
       if (!currentUser) {
         setProfile(null);
@@ -30,6 +31,8 @@ export function AuthProvider({ children }) {
       const userRef = doc(firestore, "users", currentUser.uid);
 
       unsubscribeProfile = onSnapshot(userRef, (snapshot) => {
+        if (!isActive) return;
+
         setProfile(
           snapshot.exists()
             ? { id: snapshot.id, ...snapshot.data() }
@@ -44,6 +47,7 @@ export function AuthProvider({ children }) {
     });
 
     return () => {
+      isActive = false;
       unsubscribeAuth();
       unsubscribeProfile?.();
     };

@@ -26,10 +26,11 @@ export default function ExploreProducts({
     const [isTouching, setIsTouching] = useState(false);
 
     const dragX = useMotionValue(0);
+    const safeProducts = Array.isArray(products) ? products.filter(Boolean).filter((product) => product && product.id) : [];
 
     useEffect(() => {
         setActiveIndex(0);
-    }, [products.length]);
+    }, [products?.length]);
 
     const rotate = useTransform(
         dragX,
@@ -45,15 +46,15 @@ export default function ExploreProducts({
 
     {/*auto-slide*/}
     useEffect(() => {
-        if (isHovered || isTouching) return;
+        if (isHovered || isTouching || safeProducts.length <= 1) return;
         const interval = setInterval(() => {
             setDirection(1);
             setActiveIndex(prev =>
-                (prev + 1) % products.length
+                (prev + 1) % safeProducts.length
             );
         }, 4000);
         return () => clearInterval(interval);
-    }, [products.length, isHovered, isTouching]);
+    }, [safeProducts.length, isHovered, isTouching]);
 
     {/*for-mobile*/}
     useEffect(() => {
@@ -67,18 +68,20 @@ export default function ExploreProducts({
     }, []);
 
     const nextSlide = () => {
+        if (safeProducts.length <= 1) return;
         setDirection(1);
 
         setActiveIndex((prev) =>
-            (prev + 1) % products.length
+            (prev + 1) % safeProducts.length
         );
     };
 
     const prevSlide = () => {
+        if (safeProducts.length <= 1) return;
         setDirection(-1);
 
         setActiveIndex((prev) =>
-            (prev - 1 + products.length) % products.length
+            (prev - 1 + safeProducts.length) % safeProducts.length
         );
     };
 
@@ -90,13 +93,15 @@ export default function ExploreProducts({
         );
     }
 
-    const visibleProducts = [
-        products[(activeIndex - 1 + products.length) % products.length],
-        products[activeIndex],
-        products[(activeIndex + 1) % products.length],
-    ];
+    const visibleProducts = safeProducts.length
+        ? [
+            safeProducts[(activeIndex - 1 + safeProducts.length) % safeProducts.length],
+            safeProducts[activeIndex % safeProducts.length],
+            safeProducts[(activeIndex + 1) % safeProducts.length],
+        ]
+        : [];
 
-    if (products.length === 0) {
+    if (safeProducts.length === 0) {
         return (
             <section className="px-6 py-24 text-center">
                 <p className="text-sm font-semibold text-stone-500">Belum ada produk aktif dari seller.</p>
@@ -207,8 +212,8 @@ export default function ExploreProducts({
             {/* Gambar */}
             <div className="relative h-72 overflow-hidden">
                 <img
-                    src={product.image}
-                    alt={product.name}
+                    src={product?.image || "images/Sirup.jpeg"}
+                    alt={product?.name || "Produk Mangrovise"}
                     className={`
                         w-full
                         h-full
@@ -224,7 +229,7 @@ export default function ExploreProducts({
                 />
                 {/* Gradient Overlay */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />
-                {product.badge && (
+                {product?.badge && (
                     <span className="absolute top-4 right-4 bg-accent-ochre text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase">
                         {product.badge}
                     </span>
@@ -238,16 +243,16 @@ export default function ExploreProducts({
             <div className="p-6 space-y-4">
                 <div>
                     <span className="text-xs uppercase text-stone-400 font-bold tracking-wider">
-                        {product.category}
+                        {product?.category || "Produk"}
                     </span>
                     <h3 className="font-serif text-2xl font-bold mt-2">
-                        {product.name}
+                        {product?.name || "Produk Mangrovise"}
                     </h3>
                     <p className="text-xs font-bold uppercase tracking-wider text-accent-ochre mt-2">
-                        {product.storeName || "Toko Mangrovise"}
+                        {product?.storeName || "Toko Mangrovise"}
                     </p>
                     <p className="text-sm text-stone-500 mt-2 line-clamp-2">
-                        {product.description}
+                        {product?.description || "Deskripsi produk belum tersedia."}
                     </p>
                 </div>
                 
@@ -278,7 +283,7 @@ export default function ExploreProducts({
         ${isCenter ? "text-[18px]" : "text-[15px]"}
     `}
 >
-    Rp {product.price.toLocaleString("id-ID")}
+    Rp {Number(product?.price || 0).toLocaleString("id-ID")}
 </span>
                     </div>
                     <button
@@ -313,7 +318,7 @@ export default function ExploreProducts({
                             Harga
                         </span>
                         <span className="text-[20px] font-bold leading-none text-mangrove-deep whitespace-nowrap">
-                            Rp {product.price.toLocaleString("id-ID")}
+                            Rp {Number(product?.price || 0).toLocaleString("id-ID")}
                         </span>
                     </div>
                     <button

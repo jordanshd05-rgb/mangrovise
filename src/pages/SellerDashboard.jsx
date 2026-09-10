@@ -12,8 +12,10 @@ import {
 } from "firebase/firestore";
 import { firestore } from "../firebase";
 import { useAuth } from "../context/AuthContext.jsx";
+import SellerChatDrawer from "../components/SellerChatDrawer.jsx";
 import SellerOrders from "./SellerOrders.jsx";
-import { ImagePlus, LoaderCircle, Upload } from "lucide-react";
+import { ImagePlus, LoaderCircle, MessageSquareText, Upload } from "lucide-react";
+import { listenToChatMessages, listenToSellerChats, sendChatMessage } from "../services/chatService";
 
 const IMGUR_CLIENT_ID = "5440db001223b9f";
 const PRODUCT_CATEGORIES = ["Makanan", "Minuman"];
@@ -80,6 +82,10 @@ const initialForm = {
   description: "",
   category: "Makanan",
   imageUrl: "",
+  kemasan: "",
+  berat: "",
+  masaSimpan: "",
+  asalProduk: "",
 };
 
 const initialStoreProfile = {
@@ -105,6 +111,13 @@ export default function SellerDashboard({ triggerToast }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("products");
+  const [sellerChats, setSellerChats] = useState([]);
+  const [selectedChat, setSelectedChat] = useState(null);
+  const [activeChatId, setActiveChatId] = useState(null);
+  const [activeMessages, setActiveMessages] = useState([]);
+  const [replyText, setReplyText] = useState("");
+  const [replying, setReplying] = useState(false);
+  const [chatDrawerOpen, setChatDrawerOpen] = useState(false);
 
   useEffect(() => {
     if (!firebaseUser || !isSeller) {
@@ -166,6 +179,81 @@ export default function SellerDashboard({ triggerToast }) {
     );
   }, [firebaseUser, isSeller]);
 
+  useEffect(() => {
+    if (!firebaseUser || !isSeller) {
+      setSellerChats([]);
+      return undefined;
+    }
+
+    const sellerAccountId = firebaseUser.uid || "admin-seller";
+    const shouldShowAllChats = sellerAccountId === "admin-seller" || sellerAccountId === "admin" || sellerAccountId === "all";
+
+    return listenToSellerChats(shouldShowAllChats ? "admin-seller" : sellerAccountId, (chats) => {
+      setSellerChats(chats);
+      setSelectedChat((current) => {
+        if (!current) return current;
+        const refreshed = chats.find((chat) => chat.id === current.id);
+        return refreshed || null;
+      });
+    });
+  }, [firebaseUser, isSeller]);
+
+  useEffect(() => {
+    if (!selectedChat?.id || !firebaseUser || !isSeller) {
+      setActiveChatId(null);
+      setActiveMessages([]);
+      return undefined;
+    }
+
+    const chatId = selectedChat.id;
+    setActiveChatId(chatId);
+    setReplyText("");
+
+    const unsubscribe = listenToChatMessages(chatId, (liveMessages) => {
+      setActiveMessages(liveMessages);
+    });
+
+    return () => unsubscribe();
+  }, [selectedChat, firebaseUser, isSeller]);
+
+  const handleOpenChat = (chat) => {
+    setSelectedChat(chat);
+    setActiveChatId(chat?.id || null);
+    setChatDrawerOpen(true);
+  };
+
+  const handleCloseChat = () => {
+    setChatDrawerOpen(false);
+    setSelectedChat(null);
+    setActiveChatId(null);
+    setActiveMessages([]);
+    setReplyText("");
+  };
+
+  const handleReply = async (event) => {
+    event?.preventDefault();
+
+    const trimmedReply = replyText.trim();
+    if (!activeChatId || !firebaseUser?.uid || !trimmedReply) return;
+
+    setReplying(true);
+
+    try {
+      await sendChatMessage({
+        chatId: activeChatId,
+        senderId: firebaseUser.uid,
+        senderRole: "seller",
+        text: trimmedReply,
+      });
+      setReplyText("");
+    } catch (replyError) {
+      console.error("Seller reply failed:", replyError);
+      triggerToast?.("Balasan gagal dikirim", "error");
+    } finally {
+      setReplying(false);
+    }
+  };
+
   const handleStoreProfileChange = (event) => {
     const { name, value } = event.target;
     setStoreProfile((current) => ({ ...current, [name]: value }));
@@ -202,11 +290,22 @@ export default function SellerDashboard({ triggerToast }) {
   };
 
   const resetForm = () => {
+    if (localPreviewUrl) {
+      URL.revokeObjectURL(localPreviewUrl);
+    }
     setForm(initialForm);
     setLocalPreviewUrl("");
     setUploadedPreviewUrl("");
     setEditingId(null);
   };
+
+  useEffect(() => {
+    return () => {
+      if (localPreviewUrl) {
+        URL.revokeObjectURL(localPreviewUrl);
+      }
+    };
+  }, [localPreviewUrl]);
 
   const handlePhotoChange = async (event) => {
     const selectedFile = event.target.files?.[0];
@@ -220,6 +319,11 @@ export default function SellerDashboard({ triggerToast }) {
     setError("");
     setUploadingImage(true);
     setUploadedPreviewUrl("");
+
+    if (localPreviewUrl) {
+      URL.revokeObjectURL(localPreviewUrl);
+    }
+
     const localUrl = URL.createObjectURL(selectedFile);
     setLocalPreviewUrl(localUrl);
 
@@ -282,14 +386,29 @@ export default function SellerDashboard({ triggerToast }) {
         return;
       }
 
+      const kemasan = (form.kemasan || "").trim() || "1 pcs";
+      const berat = (form.berat || "").trim() || "Belum diisi";
+      const masaSimpan = (form.masaSimpan || "").trim() || "Belum diisi";
+      const asalProduk = (form.asalProduk || "").trim() || "Kota Langsa";
+
+      const sellerAccountId = firebaseUser.uid || "admin-seller";
+
       const productData = {
-        sellerId: firebaseUser.uid,
+        sellerId: sellerAccountId,
         name: form.name.trim(),
         price: Number(form.price),
         stock: Number(form.stock),
         description: form.description.trim(),
         category: form.category,
         imageUrl,
+        kemasan,
+        berat,
+        masaSimpan,
+        asalProduk,
+        packageSize: kemasan,
+        weight: berat,
+        shelfLife: masaSimpan,
+        origin: asalProduk,
         status: "active",
         updatedAt: serverTimestamp(),
       };
@@ -321,6 +440,10 @@ export default function SellerDashboard({ triggerToast }) {
       description: product.description || "",
       category: PRODUCT_CATEGORIES.includes(product.category) ? product.category : "",
       imageUrl: product.imageUrl || "",
+      kemasan: product.kemasan || product.packageSize || "",
+      berat: product.berat || product.weight || "",
+      masaSimpan: product.masaSimpan || product.shelfLife || "",
+      asalProduk: product.asalProduk || product.origin || "",
     });
     setLocalPreviewUrl("");
     setUploadedPreviewUrl(product.imageUrl || "");
@@ -406,7 +529,7 @@ export default function SellerDashboard({ triggerToast }) {
         </div>
       )}
 
-      <div className="flex gap-2 border-b border-stone-200 pb-2">
+      <div className="flex flex-wrap gap-2 border-b border-stone-200 pb-2">
         <button
           onClick={() => setActiveTab("products")}
           className={`rounded-xl px-4 py-2.5 text-sm font-bold transition-colors ${activeTab === "products" ? "bg-mangrove-deep text-white" : "text-stone-600 hover:bg-stone-100"}`}
@@ -419,10 +542,115 @@ export default function SellerDashboard({ triggerToast }) {
         >
           Pesanan Masuk
         </button>
+        <button
+          onClick={() => setActiveTab("chat")}
+          className={`rounded-xl px-4 py-2.5 text-sm font-bold transition-colors ${activeTab === "chat" ? "bg-mangrove-deep text-white" : "text-stone-600 hover:bg-stone-100"}`}
+        >
+          Chat / Pesan Masuk
+        </button>
       </div>
 
       {activeTab === "orders" ? (
         <SellerOrders products={products} />
+      ) : activeTab === "chat" ? (
+        <div className="overflow-hidden rounded-3xl border border-stone-200 bg-white shadow-sm">
+          <div className="flex items-center justify-between gap-3 border-b border-stone-200 bg-stone-50 px-4 py-3 sm:px-6">
+            <div>
+              <h2 className="text-xl font-serif font-bold text-stone-800">Percakapan Pembeli</h2>
+              <p className="text-sm text-stone-500">Daftar chat yang menanyakan produk Anda.</p>
+            </div>
+            <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
+              <MessageSquareText className="mr-1 h-3.5 w-3.5" />
+              {sellerChats.length} chat
+            </span>
+          </div>
+
+          <div className="md:flex md:h-[70vh] md:min-h-0">
+            <aside className={`w-full ${selectedChat ? "hidden md:block" : "block"} md:w-[32%] md:border-r md:border-stone-200 md:max-h-[70vh]`}>
+              {sellerChats.length === 0 ? (
+                <div className="p-6 text-center text-sm text-stone-500">
+                  Belum ada percakapan dari pembeli untuk toko Anda.
+                </div>
+              ) : (
+                <div className="max-h-[38vh] overflow-y-auto p-2 scrollbar-thin scrollbar-thumb-stone-300 scrollbar-track-stone-100 sm:max-h-[70vh] sm:p-4">
+                  <div className="space-y-2 sm:space-y-3">
+                    {sellerChats.map((chat) => {
+                      const isSelected = selectedChat?.id === chat.id;
+                      const isUnread = Boolean(chat.lastMessageSender) && chat.lastMessageSender !== firebaseUser?.uid && !isSelected;
+
+                      return (
+                        <button
+                          key={chat.id}
+                          type="button"
+                          onClick={() => handleOpenChat(chat)}
+                          className={`flex w-full items-start justify-between gap-2 rounded-2xl border p-2.5 text-left transition sm:gap-3 sm:p-3 ${
+                            isSelected
+                              ? "border-emerald-200 bg-emerald-50 shadow-sm"
+                              : "border-stone-200 bg-stone-50 hover:border-mangrove-deep/50 hover:bg-white"
+                          }`}
+                        >
+                          <div className="flex min-w-0 flex-1 items-start gap-2.5 sm:gap-3">
+                            <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-mangrove-deep to-emerald-700 text-xs font-bold text-white sm:h-11 sm:w-11 sm:text-sm">
+                              {(chat.buyerName || "P").charAt(0).toUpperCase()}
+                              {isUnread && (
+                                <span className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full border-2 border-white bg-emerald-500 text-[8px] font-bold text-white sm:h-4 sm:w-4" />
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className={`truncate text-xs font-bold sm:text-sm ${isUnread ? "text-stone-900" : "text-stone-800"}`}>
+                                  {chat.buyerName || "Pembeli"}
+                                </p>
+                                {chat.lastMessageAt && (
+                                  <span className="shrink-0 text-[9px] text-stone-400 sm:text-[10px]">
+                                    {new Date(chat.lastMessageAt).toLocaleDateString("id-ID", {
+                                      day: "2-digit",
+                                      month: "short",
+                                    })}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="mt-1 truncate text-[10px] font-semibold text-mangrove-deep sm:text-[11px]">{chat.productName || "Produk"}</p>
+                              <p className={`mt-1.5 line-clamp-2 text-[11px] sm:text-sm ${isUnread ? "font-semibold text-stone-800" : "text-stone-600"}`}>
+                                {chat.lastMessage || "Belum ada pesan."}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {isUnread && (
+                              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-500 px-1.5 text-[9px] font-bold text-white sm:h-6 sm:min-w-6">
+                                Baru
+                              </span>
+                            )}
+                            <span className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full sm:h-8 sm:w-8 ${isSelected ? "bg-mangrove-deep text-white" : "bg-white text-mangrove-deep shadow-sm ring-1 ring-stone-200"}`}>
+                              <MessageSquareText className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </aside>
+
+            <section className={`${selectedChat ? "block" : "hidden md:block"} flex-1 min-h-[420px] bg-stone-50 md:min-h-0`}>
+              {selectedChat ? (
+                <SellerChatDrawer
+                  isOpen={true}
+                  inline={true}
+                  onClose={handleCloseChat}
+                  onBack={handleCloseChat}
+                  chat={selectedChat}
+                />
+              ) : (
+                <div className="flex h-full min-h-[360px] items-center justify-center p-6 text-center text-sm text-stone-500 md:min-h-0">
+                  Pilih satu percakapan untuk melihat detail chat dan membalas pembeli.
+                </div>
+              )}
+            </section>
+          </div>
+        </div>
       ) : (
       <>
       <form onSubmit={handleSubmit} className={`space-y-5 rounded-3xl border border-stone-200 bg-white p-6 shadow-sm sm:p-8 ${!canManageProducts ? "opacity-70" : ""}`}>
@@ -471,6 +699,24 @@ export default function SellerDashboard({ triggerToast }) {
           </label>
           <input disabled={!canManageProducts} type="url" value={form.imageUrl} onChange={(event) => { setForm({ ...form, imageUrl: event.target.value }); setUploadedPreviewUrl(event.target.value); setLocalPreviewUrl(""); }} placeholder="Atau tempel URL foto (opsional)" className="w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm font-normal outline-none focus:border-accent-ochre disabled:cursor-not-allowed" />
         </div>
+        <div className="grid gap-5 sm:grid-cols-2">
+          <label className="space-y-2 text-sm font-semibold text-stone-700">
+            Kemasan
+            <input disabled={!canManageProducts} value={form.kemasan} onChange={(event) => setForm({ ...form, kemasan: event.target.value })} placeholder="contoh: 250 gram / 500 ml" className="w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 font-normal outline-none focus:border-accent-ochre disabled:cursor-not-allowed" />
+          </label>
+          <label className="space-y-2 text-sm font-semibold text-stone-700">
+            Berat
+            <input disabled={!canManageProducts} value={form.berat} onChange={(event) => setForm({ ...form, berat: event.target.value })} placeholder="contoh: 250 gram" className="w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 font-normal outline-none focus:border-accent-ochre disabled:cursor-not-allowed" />
+          </label>
+          <label className="space-y-2 text-sm font-semibold text-stone-700">
+            Masa Simpan
+            <input disabled={!canManageProducts} value={form.masaSimpan} onChange={(event) => setForm({ ...form, masaSimpan: event.target.value })} placeholder="contoh: 12 bulan" className="w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 font-normal outline-none focus:border-accent-ochre disabled:cursor-not-allowed" />
+          </label>
+          <label className="space-y-2 text-sm font-semibold text-stone-700">
+            Asal Produk
+            <input disabled={!canManageProducts} value={form.asalProduk} onChange={(event) => setForm({ ...form, asalProduk: event.target.value })} placeholder="contoh: Kuala Langsa" className="w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 font-normal outline-none focus:border-accent-ochre disabled:cursor-not-allowed" />
+          </label>
+        </div>
         <label className="block space-y-2 text-sm font-semibold text-stone-700">
           Deskripsi
           <textarea disabled={!canManageProducts} value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} required rows="4" className="w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 font-normal outline-none focus:border-accent-ochre disabled:cursor-not-allowed" />
@@ -515,6 +761,12 @@ export default function SellerDashboard({ triggerToast }) {
       </div>
       </>
       )}
+
+      <SellerChatDrawer
+        isOpen={chatDrawerOpen}
+        onClose={handleCloseChat}
+        chat={selectedChat}
+      />
     </section>
   );
 }

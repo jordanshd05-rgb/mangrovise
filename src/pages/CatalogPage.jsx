@@ -177,7 +177,7 @@ export default function CatalogPage({
                           <div className="space-y-1.5">
                             <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-stone-400">
                               <span>{product.category}</span>
-                              <span className="bg-stone-100 text-stone-700 px-2 py-0.5 rounded-md font-mono">{product.flavor}</span>
+                              <span className="bg-stone-100 text-stone-700 px-2 py-0.5 rounded-md font-mono">{(Array.isArray(product.flavor) ? product.flavor : [product.flavor]).join(", ") || "—"}</span>
                             </div>
                             <h4 className="font-serif font-bold text-[20px] text-stone-900 leading-tight group-hover:text-accent-ochre transition-colors">
                               {product.name}

@@ -170,6 +170,19 @@ export const ASSET_CONFIG = {
     }
   ]
 };
+const PRODUCT_FLAVORS = ["Manis", "Asam", "Gurih"];
+
+function normalizeFlavor(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw.filter((item) => PRODUCT_FLAVORS.includes(item));
+  if (typeof raw === "string") {
+    const parts = raw.split(/[,|]/).map((item) => item.trim()).filter(Boolean);
+    if (parts.length) return parts.filter((item) => PRODUCT_FLAVORS.includes(item));
+    return PRODUCT_FLAVORS.includes(raw.trim()) ? [raw.trim()] : [];
+  }
+  return [];
+}
+
 export default function App() {
   const { role, isSeller, firebaseUser } = useAuth();
   const user = firebaseUser;
@@ -260,7 +273,7 @@ export default function App() {
               image: product.imageUrl || product.image || "images/Sirup.jpeg",
               price: Number(product.price || 0),
               category: product.category,
-              flavor: product.flavor || "Pilihan Lestari",
+              flavor: normalizeFlavor(product.flavor),
               storeName: product.storeName || store?.name || "Toko Mangrovise",
             };
           }));
@@ -675,7 +688,8 @@ const finalTotal = useMemo(() => {
         || ACTIVE_PRODUCT_CATEGORIES.includes(selectedCategory) && product.category === selectedCategory;
       let matchesFlavor = true;
       if (selectedFlavor !== "Semua") {
-        matchesFlavor = product.flavor.toLowerCase().includes(selectedFlavor.toLowerCase());
+        const flavors = Array.isArray(product.flavor) ? product.flavor : [product.flavor];
+        matchesFlavor = flavors.some((item) => item.toLowerCase().includes(selectedFlavor.toLowerCase()));
       }
       return matchesSearch && matchesCategory && matchesFlavor;
     });

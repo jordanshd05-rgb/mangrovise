@@ -19,6 +19,20 @@ import { listenToChatMessages, listenToSellerChats, sendChatMessage } from "../s
 
 const IMGUR_CLIENT_ID = "5440db001223b9f";
 const PRODUCT_CATEGORIES = ["Makanan", "Minuman"];
+const PRODUCT_FLAVORS = ["Manis", "Asam", "Gurih"];
+
+function normalizeFlavor(rawFlavor) {
+  if (!rawFlavor) return [];
+  if (Array.isArray(rawFlavor)) {
+    return rawFlavor.filter((item) => PRODUCT_FLAVORS.includes(item));
+  }
+  if (typeof rawFlavor === "string") {
+    const parts = rawFlavor.split(/[,|]/).map((item) => item.trim()).filter(Boolean);
+    if (parts.length) return parts.filter((item) => PRODUCT_FLAVORS.includes(item));
+    return PRODUCT_FLAVORS.includes(rawFlavor.trim()) ? [rawFlavor.trim()] : [];
+  }
+  return [];
+}
 
 function compressImageToDataUrl(file) {
   return new Promise((resolve, reject) => {
@@ -86,6 +100,7 @@ const initialForm = {
   berat: "",
   masaSimpan: "",
   asalProduk: "",
+  flavor: [],
 };
 
 const initialStoreProfile = {
@@ -259,6 +274,18 @@ export default function SellerDashboard({ triggerToast }) {
     setStoreProfile((current) => ({ ...current, [name]: value }));
   };
 
+  const handleFlavorChange = (flavor) => {
+    setForm((current) => {
+      const isActive = current.flavor.includes(flavor);
+      return {
+        ...current,
+        flavor: isActive
+          ? current.flavor.filter((item) => item !== flavor)
+          : [...current.flavor, flavor],
+      };
+    });
+  };
+
   const handleSubmitStoreProfile = async (event) => {
     event.preventDefault();
     setError("");
@@ -394,6 +421,7 @@ export default function SellerDashboard({ triggerToast }) {
       const sellerAccountId = firebaseUser.uid || "admin-seller";
 
       const productData = {
+        flavor: form.flavor || [],
         sellerId: sellerAccountId,
         name: form.name.trim(),
         price: Number(form.price),
@@ -444,6 +472,7 @@ export default function SellerDashboard({ triggerToast }) {
       berat: product.berat || product.weight || "",
       masaSimpan: product.masaSimpan || product.shelfLife || "",
       asalProduk: product.asalProduk || product.origin || "",
+      flavor: normalizeFlavor(product.flavor || product.rasa),
     });
     setLocalPreviewUrl("");
     setUploadedPreviewUrl(product.imageUrl || "");
@@ -681,6 +710,33 @@ export default function SellerDashboard({ triggerToast }) {
             Produk harus termasuk kategori Makanan atau Minuman.
           </p>
         )}
+        <div className="space-y-3">
+          <p className="text-sm font-semibold text-stone-700">Rasa Produk</p>
+          <div className="flex flex-wrap gap-3">
+            {PRODUCT_FLAVORS.map((flavor) => {
+              const isChecked = form.flavor.includes(flavor);
+              return (
+                <label
+                  key={flavor}
+                  className={`flex cursor-pointer items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition-all ${
+                    isChecked
+                      ? "border-accent-ochre bg-amber-50 text-mangrove-deep"
+                      : "border-stone-200 bg-stone-50 text-stone-600 hover:border-stone-300"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={() => handleFlavorChange(flavor)}
+                    disabled={!canManageProducts}
+                    className="h-4 w-4 accent-[#d97706]"
+                  />
+                  {flavor}
+                </label>
+              );
+            })}
+          </div>
+        </div>
         <div className="space-y-3">
           <p className="text-sm font-semibold text-stone-700">Foto Produk</p>
           <label className="relative flex min-h-64 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-stone-300 bg-stone-50 p-5 text-center transition-colors hover:border-accent-ochre hover:bg-amber-50/40">

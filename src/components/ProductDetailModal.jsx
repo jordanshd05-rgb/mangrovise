@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   X,
   ShoppingCart,
@@ -15,9 +16,42 @@ import {
   TriangleAlert,
   Hammer,
   MessageCircle,
+  Trash2,
+  Camera,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
+import { calculateMultiImpact } from "../constants/impactMetrics.js";
+import { addReview, deleteReview, listenToReviews } from "../services/reviewService.js";
 import ChatDrawer from "./ChatDrawer";
+
+function compressImage(file, maxWidth = 800, quality = 0.7) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      const img = new Image();
+
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const ratio = Math.min(1, maxWidth / img.width);
+        canvas.width = Math.max(1, Math.round(img.width * ratio));
+        canvas.height = Math.max(1, Math.round(img.height * ratio));
+
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        const base64 = canvas.toDataURL("image/jpeg", quality);
+        resolve(base64);
+      };
+
+      img.onerror = () => reject(new Error("Gagal membaca gambar untuk kompresi."));
+      img.src = String(reader.result || "");
+    };
+
+    reader.onerror = () => reject(new Error("Gagal membaca file gambar."));
+    reader.readAsDataURL(file);
+  });
+}
 
 export default function ProductDetailModal({
   show,
@@ -35,6 +69,12 @@ export default function ProductDetailModal({
   const [selectedImage, setSelectedImage] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [reviews, setReviews] = useState([]);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState("");
+  const [reviewPhoto, setReviewPhoto] = useState("");
+  const [reviewPhotoName, setReviewPhotoName] = useState("");
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
 
   useEffect(() => {
     if(product){
@@ -43,12 +83,91 @@ export default function ProductDetailModal({
     }
   }, [product]);
 
-  if (!show || !product) return null;
+  useEffect(() => {
+    if (!product?.id && !product?.productId) return undefined;
 
-  console.log("PRODUCT MODAL:", product);
+    const productId = String(product.id || product.productId);
+    const unsubscribe = listenToReviews(productId, (nextReviews) => {
+      setReviews(nextReviews);
+    });
+
+    return () => unsubscribe();
+  }, [product?.id, product?.productId]);
+
+  const handlePhotoChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      setReviewPhoto("");
+      setReviewPhotoName("");
+      return;
+    }
+
+    try {
+      const compressed = await compressImage(file, 800, 0.7);
+      setReviewPhoto(compressed);
+      setReviewPhotoName(file.name || "review-photo");
+    } catch (error) {
+      console.error("Error compressing review image:", error);
+      setReviewPhoto("");
+      setReviewPhotoName("");
+      triggerToast?.("Gagal memproses foto ulasan. Silakan coba foto lain.", "error");
+    }
+  };
+
+  const handleSubmitReview = async () => {
+    if (!user?.uid) {
+      triggerToast?.("Silakan login terlebih dahulu untuk menulis ulasan.", "info");
+      onRequireLogin?.();
+      return;
+    }
+
+    if (!reviewComment.trim()) {
+      triggerToast?.("Komentar ulasan tidak boleh kosong.", "info");
+      return;
+    }
+
+    setIsSubmittingReview(true);
+
+    try {
+      await addReview(String(product.id || product.productId), {
+        userId: user.uid,
+        userName: user.displayName || user.email?.split("@")[0] || "Pengguna",
+        rating: reviewRating,
+        comment: reviewComment.trim(),
+        photoBase64: reviewPhoto,
+      });
+
+      setReviewRating(5);
+      setReviewComment("");
+      setReviewPhoto("");
+      setReviewPhotoName("");
+      triggerToast?.("Ulasan berhasil dikirim.", "success");
+    } catch (error) {
+      console.error("Error adding review:", error);
+      triggerToast?.("Gagal mengirim ulasan.", "error");
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  };
+
+  const handleDeleteReview = async (reviewId) => {
+    const productId = String(product.id || product.productId);
+    if (!productId || !reviewId) return;
+
+    try {
+      await deleteReview(productId, reviewId);
+      triggerToast?.("Ulasan berhasil dihapus.", "success");
+    } catch (error) {
+      console.error("Error deleting review:", error);
+      triggerToast?.("Gagal menghapus ulasan.", "error");
+    }
+  };
+
+  if (!show || !product) return null;
 
   const totalPrice = product.price * quantity;
   const totalTrees = quantity;
+  const impactSummary = calculateMultiImpact(quantity);
   const fallbackText = (value, fallback) => (value && String(value).trim()) ? value : fallback;
   const kemasan = fallbackText(product.kemasan ?? product.packageSize, "1 pcs");
   const berat = fallbackText(product.berat ?? product.weight, "Belum diisi");
@@ -78,49 +197,44 @@ export default function ProductDetailModal({
     setIsChatOpen(true);
   };
 
-  return (
+  return createPortal(
     <>
-    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto lg:flex lg:items-center lg:justify-center">
-      <div
-        className="
-          bg-white
-          w-full
-          lg:max-w-[900px]
-
-          min-h-screen
-          lg:min-h-0
-          lg:h-[88vh]
-
-          lg:my-6
-
-          rounded-none
-          lg:rounded-[28px]
-
-          shadow-2xl
-          overflow-hidden
-        "
-      >
-        <div className="grid grid-cols-1 lg:grid-cols-[47%_53%] h-full">
-          {/* ================= LEFT ================= */}
-          <div
-            className="
-              relative
-              bg-stone-100
-              p-4
-              lg:p-5
-              flex
-              flex-col
-            "
-          >
-            {/* Tombol Close */}
-            <button
-              type="button"
-              onClick={onClose}
-              className="absolute top-6 right-6 z-30 cursor-pointer bg-white w-10 h-10 rounded-full shadow hover:bg-red-50 transition"
-              aria-label="Tutup produk"
+      <div className="fixed inset-0 z-[99998] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+        <div
+          className="
+            relative
+            z-[99999]
+            w-full
+            max-w-4xl
+            max-h-[90vh]
+            bg-white
+            rounded-2xl
+            shadow-2xl
+            overflow-y-auto
+            my-auto
+          "
+        >
+          <div className="grid grid-cols-1 lg:grid-cols-[47%_53%] h-full">
+            {/* ================= LEFT ================= */}
+            <div
+              className="
+                relative
+                bg-stone-100
+                p-4
+                lg:p-5
+                flex
+                flex-col
+              "
             >
-              <X className="w-5 h-5 mx-auto text-red-500" />
-            </button>
+              {/* Tombol Close */}
+              <button
+                type="button"
+                onClick={onClose}
+                className="absolute top-4 right-4 z-10 cursor-pointer bg-white/90 backdrop-blur-sm w-10 h-10 rounded-full shadow-lg ring-1 ring-black/5 hover:bg-red-50 transition"
+                aria-label="Tutup produk"
+              >
+                <X className="w-5 h-5 mx-auto text-red-500" />
+              </button>
             {/* Gambar Besar */}
             <img
               src={selectedImage || product.image}
@@ -368,6 +482,52 @@ export default function ProductDetailModal({
                   </p>
                 </div>
               </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-3">
+                  <div className="flex items-center gap-2 text-emerald-700">
+                    <Leaf className="h-4 w-4" />
+                    <span className="text-[11px] font-bold uppercase tracking-wide">Karbon</span>
+                  </div>
+                  <p className="mt-2 text-lg font-black text-mangrove-deep">
+                    {impactSummary.co2Kg.toLocaleString("id-ID")}
+                  </p>
+                  <p className="text-[10px] text-stone-600">kg CO2</p>
+                </div>
+
+                <div className="rounded-2xl border border-sky-100 bg-sky-50 p-3">
+                  <div className="flex items-center gap-2 text-sky-700">
+                    <MapPin className="h-4 w-4" />
+                    <span className="text-[11px] font-bold uppercase tracking-wide">Pantai</span>
+                  </div>
+                  <p className="mt-2 text-lg font-black text-mangrove-deep">
+                    {impactSummary.coastalMeter.toLocaleString("id-ID")}
+                  </p>
+                  <p className="text-[10px] text-stone-600">Meter</p>
+                </div>
+
+                <div className="rounded-2xl border border-amber-100 bg-amber-50 p-3">
+                  <div className="flex items-center gap-2 text-amber-700">
+                    <Scale className="h-4 w-4" />
+                    <span className="text-[11px] font-bold uppercase tracking-wide">Habitat</span>
+                  </div>
+                  <p className="mt-2 text-lg font-black text-mangrove-deep">
+                    {impactSummary.habitatSqM.toLocaleString("id-ID")}
+                  </p>
+                  <p className="text-[10px] text-stone-600">m²</p>
+                </div>
+
+                <div className="rounded-2xl border border-cyan-100 bg-cyan-50 p-3">
+                  <div className="flex items-center gap-2 text-cyan-700">
+                    <ShieldCheck className="h-4 w-4" />
+                    <span className="text-[11px] font-bold uppercase tracking-wide">Spesies</span>
+                  </div>
+                  <p className="mt-2 text-lg font-black text-mangrove-deep">
+                    {impactSummary.speciesEstimate.toLocaleString("id-ID")}
+                  </p>
+                  <p className="text-[10px] text-stone-600">Spesies</p>
+                </div>
+              </div>
             {/* Quantity */}
               <div className="mt-4 lg:mt-5 flex items-center justify-between">
                 <div>
@@ -527,6 +687,137 @@ export default function ProductDetailModal({
                 </div>
               </div>
             </div>
+
+            <div className="mt-6 border-t border-stone-200 pt-5">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-lg font-bold text-stone-900">Ulasan Produk</h3>
+                <span className="text-xs font-semibold text-stone-500">{reviews.length} review</span>
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-stone-200 bg-stone-50 p-4">
+                <label className="block text-sm font-semibold text-stone-800">Rating</label>
+                <div className="mt-2 flex items-center gap-1">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setReviewRating(star)}
+                      className="p-1 transition"
+                      aria-label={`Beri rating ${star} bintang`}
+                    >
+                      <Star
+                        className={`h-6 w-6 ${
+                          star <= reviewRating ? "fill-amber-400 text-amber-400" : "text-stone-300"
+                        }`}
+                      />
+                    </button>
+                  ))}
+                </div>
+
+                <label className="mt-4 block text-sm font-semibold text-stone-800">Komentar</label>
+                <textarea
+                  value={reviewComment}
+                  onChange={(event) => setReviewComment(event.target.value)}
+                  rows={4}
+                  placeholder="Bagikan pengalaman Anda terhadap produk ini..."
+                  className="mt-2 w-full rounded-2xl border border-stone-200 bg-white px-3 py-3 text-sm text-stone-700 outline-none ring-0 transition focus:border-mangrove-deep"
+                />
+
+                <label className="mt-4 block text-sm font-semibold text-stone-800">Foto (opsional)</label>
+                <div className="mt-2 flex items-center gap-3">
+                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-100">
+                    <Camera className="h-4 w-4" />
+                    Pilih Foto
+                    <input type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
+                  </label>
+                  {reviewPhotoName && (
+                    <span className="truncate text-xs text-stone-500">{reviewPhotoName}</span>
+                  )}
+                </div>
+
+                {reviewPhoto && (
+                  <div className="mt-3 overflow-hidden rounded-2xl border border-stone-200 bg-white p-2">
+                    <img src={reviewPhoto} alt="Preview review" className="h-36 w-full rounded-xl object-cover" />
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleSubmitReview}
+                  disabled={!user || isSubmittingReview}
+                  className="mt-4 w-full rounded-2xl bg-mangrove-deep px-4 py-3 text-sm font-bold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:bg-stone-300"
+                >
+                  {isSubmittingReview ? "Mengirim..." : user ? "Kirim Ulasan" : "Login untuk Memberi Ulasan"}
+                </button>
+              </div>
+
+              <div className="mt-5 space-y-4">
+                {reviews.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-stone-300 bg-white p-4 text-center text-sm text-stone-500">
+                    Belum ada ulasan untuk produk ini.
+                  </div>
+                ) : (
+                  reviews.map((review) => {
+                    const reviewDate = review.createdAt?.seconds
+                      ? new Date(review.createdAt.seconds * 1000).toLocaleDateString("id-ID", {
+                          day: "numeric",
+                          month: "long",
+                          year: "numeric",
+                        })
+                      : "Baru saja";
+
+                    const isOwner = user?.uid && review.userId === user.uid;
+
+                    return (
+                      <div key={review.id} className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-bold text-stone-900">{review.userName || "Pengguna"}</p>
+                            <div className="mt-1 flex items-center gap-1">
+                              {[1, 2, 3, 4, 5].map((star) => (
+                                <Star
+                                  key={star}
+                                  className={`h-4 w-4 ${
+                                    star <= Number(review.rating || 0)
+                                      ? "fill-amber-400 text-amber-400"
+                                      : "text-stone-300"
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] text-stone-500">{reviewDate}</span>
+                            {isOwner && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteReview(review.id)}
+                                className="inline-flex items-center justify-center rounded-full bg-red-50 p-2 text-red-600 transition hover:bg-red-100"
+                                aria-label="Hapus ulasan"
+                                title="Hapus Ulasan"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <p className="mt-3 text-sm leading-6 text-stone-700">{review.comment}</p>
+
+                        {review.photoBase64 && (
+                          <img
+                            src={review.photoBase64}
+                            alt="Foto ulasan"
+                            className="mt-3 h-44 w-full rounded-2xl object-cover"
+                          />
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -534,15 +825,16 @@ export default function ProductDetailModal({
     <ChatDrawer
       isOpen={isChatOpen}
       onClose={() => setIsChatOpen(false)}
-      product={safeProduct}
-      seller={seller}
-      productId={safeProduct.id}
-      sellerId={safeProduct.sellerId}
-      onRequireLogin={() => {
-        triggerToast?.("Silakan login terlebih dahulu untuk mengirim pesan", "info");
-        onRequireLogin?.();
-      }}
-    />
-    </>
+        product={safeProduct}
+        seller={seller}
+        productId={safeProduct.id}
+        sellerId={safeProduct.sellerId}
+        onRequireLogin={() => {
+          triggerToast?.("Silakan login terlebih dahulu untuk mengirim pesan", "info");
+          onRequireLogin?.();
+        }}
+      />
+    </>,
+    document.body
   );
 }

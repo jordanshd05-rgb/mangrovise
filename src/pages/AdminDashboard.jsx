@@ -216,9 +216,15 @@ export default function AdminDashboard() {
       {error && <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
       {loading && <p className="rounded-2xl bg-white p-6 text-sm text-stone-500">Memuat data platform...</p>}
 
-      <div className="flex gap-2 border-b border-stone-200 pb-2">
+      <div className="flex flex-wrap gap-2 border-b border-stone-200 pb-2">
         <button onClick={() => setActiveTab("stores")} className={`rounded-xl px-4 py-2.5 text-sm font-bold ${activeTab === "stores" ? "bg-mangrove-deep text-white" : "text-stone-600 hover:bg-stone-100"}`}>Kelola Toko</button>
         <button onClick={() => setActiveTab("products")} className={`rounded-xl px-4 py-2.5 text-sm font-bold ${activeTab === "products" ? "bg-mangrove-deep text-white" : "text-stone-600 hover:bg-stone-100"}`}>Moderasi Produk</button>
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent("nav:open-admin-articles"))}
+          className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700"
+        >
+          Kelola Artikel
+        </button>
       </div>
 
       {activeTab === "stores" ? (

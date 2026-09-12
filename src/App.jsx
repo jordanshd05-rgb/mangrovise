@@ -17,11 +17,15 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useAuth } from "./context/AuthContext.jsx";
+import { useCart } from "./context/CartContext.jsx";
 import HomePage from "./pages/HomePage";
 import AboutPage from "./pages/AboutPage";
 import ImpactPage from "./pages/ImpactPage";
 import OrderHistory from "./pages/OrderHistory";
 import CatalogPage from "./pages/CatalogPage";
+import BlogPage from "./pages/BlogPage";
+import BlogDetailPage from "./pages/BlogDetailPage";
+import AdminArticles from "./pages/admin/AdminArticles";
 import CartDrawer from "./components/cart/CartDrawer";
 import ProductDetailModal from "./components/ProductDetailModal";
 import CheckoutModal from "./components/CheckoutModal";
@@ -185,8 +189,15 @@ function normalizeFlavor(raw) {
 
 export default function App() {
   const { role, isSeller, firebaseUser } = useAuth();
+  const { clearCart: clearCartFromContext } = useCart();
   const user = firebaseUser;
   const isAdmin = role === "admin" || ADMIN_EMAILS.includes(firebaseUser?.email?.toLowerCase());
+  const getCurrentPath = () => {
+    const path = window.location.pathname || "/";
+    return path.startsWith("/") ? path : `/${path}`;
+  };
+
+  const [routePath, setRoutePath] = useState(getCurrentPath);
   const [currentTab, setCurrentTab] = useState("beranda");
   const [liveProducts, setLiveProducts] = useState([]);
   const [storeStatusRevision, setStoreStatusRevision] = useState(0);
@@ -307,16 +318,40 @@ export default function App() {
       window.history.scrollRestoration = "manual";
     }
 
+    const syncRouteFromBrowser = () => {
+      const nextPath = getCurrentPath();
+      setRoutePath(nextPath);
+      if (nextPath === "/") setCurrentTab("beranda");
+      else if (nextPath === "/katalog") setCurrentTab("katalog");
+      else if (nextPath === "/tentang") setCurrentTab("tentang");
+      else if (nextPath === "/impact") setCurrentTab("impact");
+      else if (nextPath === "/blog") setCurrentTab("blog");
+      else if (nextPath.startsWith("/blog/")) setCurrentTab("blog-detail");
+      else if (nextPath === "/admin/articles") setCurrentTab("admin-articles");
+      else if (nextPath === "/order-history" || nextPath === "/pesanan") setCurrentTab("order-history");
+      else if (nextPath === "/user-profile") setCurrentTab("user-profile");
+      else if (nextPath === "/admin-dashboard") setCurrentTab("admin-dashboard");
+      else if (nextPath === "/seller-dashboard") setCurrentTab("seller-dashboard");
+      else if (nextPath === "/register-seller") setCurrentTab("register-seller");
+    };
+
+    const handleAdminArticlesRoute = () => {
+      navigateTo("/admin/articles");
+    };
+
+    syncRouteFromBrowser();
+    window.addEventListener("popstate", syncRouteFromBrowser);
+    window.addEventListener("nav:open-admin-articles", handleAdminArticlesRoute);
+
     const scrollTimer = setTimeout(() => {
       window.scrollTo(0, 0);
     }, 0);
 
-    return () => clearTimeout(scrollTimer);
-  }, []);
-
-  useEffect(() => {
-    setCurrentTab("beranda");
-    window.scrollTo(0, 0);
+    return () => {
+      clearTimeout(scrollTimer);
+      window.removeEventListener("popstate", syncRouteFromBrowser);
+      window.removeEventListener("nav:open-admin-articles", handleAdminArticlesRoute);
+    };
   }, []);
 
   useEffect(() => {
@@ -536,7 +571,7 @@ export default function App() {
     try {
       await signOut(auth);
       triggerToast("Berhasil keluar.");
-      if (currentTab === "pesanan" || currentTab === "order-history") {
+      if (currentTab === "pesanan" || currentTab === "order-history" || currentTab === "my-mangrove") {
         setCurrentTab("katalog");
       }
     } catch (error) {
@@ -550,8 +585,56 @@ export default function App() {
   const [showProductDetail, setShowProductDetail] = useState(false);
 
   const mainContentRef = useRef(null);
+  const navigateTo = (nextPath) => {
+    const normalizedPath = nextPath.startsWith("/") ? nextPath : `/${nextPath}`;
+    const routeValue = normalizedPath === "/" ? "/" : normalizedPath;
+
+    window.history.pushState({}, "", routeValue);
+    setRoutePath(routeValue);
+
+    if (routeValue === "/") setCurrentTab("beranda");
+    else if (routeValue === "/katalog") setCurrentTab("katalog");
+    else if (routeValue === "/tentang") setCurrentTab("tentang");
+    else if (routeValue === "/impact") setCurrentTab("impact");
+    else if (routeValue === "/blog") setCurrentTab("blog");
+    else if (routeValue.startsWith("/blog/")) setCurrentTab("blog-detail");
+    else if (routeValue === "/admin/articles") setCurrentTab("admin-articles");
+    else if (routeValue === "/order-history" || routeValue === "/pesanan") setCurrentTab("order-history");
+    else if (routeValue === "/user-profile") setCurrentTab("user-profile");
+    else if (routeValue === "/admin-dashboard") setCurrentTab("admin-dashboard");
+    else if (routeValue === "/seller-dashboard") setCurrentTab("seller-dashboard");
+
+    if (tabScrollTimerRef.current) {
+      clearTimeout(tabScrollTimerRef.current);
+    }
+
+    tabScrollTimerRef.current = setTimeout(() => {
+      mainContentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
+  };
+
   const handleTabChange = (tab) => {
     setCurrentTab(tab);
+
+    const mappedRoute = {
+      beranda: "/",
+      katalog: "/katalog",
+      tentang: "/tentang",
+      impact: "/impact",
+      blog: "/blog",
+      "admin-articles": "/admin/articles",
+      "order-history": "/order-history",
+      pesanan: "/pesanan",
+      "user-profile": "/user-profile",
+      "admin-dashboard": "/admin-dashboard",
+      "seller-dashboard": "/seller-dashboard",
+      "register-seller": "/register-seller",
+    }[tab];
+
+    if (mappedRoute) {
+      navigateTo(mappedRoute);
+      return;
+    }
 
     if (tabScrollTimerRef.current) {
       clearTimeout(tabScrollTimerRef.current);
@@ -782,6 +865,18 @@ const finalTotal = useMemo(() => {
     setIsCheckoutModalOpen(true);
     setIsCartOpen(false);
   };
+  const clearCartState = async () => {
+    setCart([]);
+    if (user) {
+      try {
+        await dbSet(dbRef(db, `carts/${user.uid}`), []);
+      } catch (error) {
+        console.error("Error resetting cart node in Realtime DB:", error);
+      }
+    }
+    await clearCartFromContext();
+  };
+
   const handleVerifyPayment = () => {
     if (!user) {
       triggerToast("Sesi Anda habis. Silakan masuk kembali.", "error");
@@ -836,15 +931,14 @@ const finalTotal = useMemo(() => {
 
     carbonSaved: ecoMetrics.carbonOffset
 };
-    paymentTimerRef.current = setTimeout(() => {
+    paymentTimerRef.current = setTimeout(async () => {
       const userOrdersRef = dbRef(db, `orders/${user.uid}`);
-      dbPush(userOrdersRef, orderData)
-        .then(() => {
-          const profileAddressRef = dbRef(db, `users/${user.uid}/profile/address`);
-          return dbSet(profileAddressRef, shippingAddress);
-        })
-        .then(() => {
-          const receipt = {
+      try {
+        await dbPush(userOrdersRef, orderData);
+        const profileAddressRef = dbRef(db, `users/${user.uid}/profile/address`);
+        await dbSet(profileAddressRef, shippingAddress);
+
+        const receipt = {
     invoiceNo,
     transactionId: orderId,
     date: dateStr,
@@ -866,14 +960,13 @@ const finalTotal = useMemo(() => {
 };
           setActiveReceipt(receipt);
           setCheckoutStatus("success");
-          setCart((prev) => prev.filter((item) => item.checked === false));
+          await clearCartState();
           triggerToast("Pembayaran Berhasil! Pesanan Anda telah tersimpan.", "success");
-        })
-        .catch((err) => {
+      } catch (err) {
           console.error("Firebase database error:", err);
           triggerToast("Gagal menyimpan pesanan ke database.", "error");
           setCheckoutStatus("pending");
-        });
+      }
     }, 2000);
   };
 
@@ -1024,10 +1117,27 @@ const finalTotal = useMemo(() => {
           </Suspense>
         )}
 
+        {currentTab === "admin-articles" && (
+          <Suspense fallback={pageLoader}>
+            <AdminArticles />
+          </Suspense>
+        )}
+
         {currentTab === "user-profile" && (
           <Suspense fallback={pageLoader}>
             <UserProfile />
           </Suspense>
+        )}
+
+        {routePath === "/blog" && (
+          <BlogPage onOpenArticle={(slug) => navigateTo(`/blog/${slug}`)} />
+        )}
+
+        {routePath.startsWith("/blog/") && (
+          <BlogDetailPage
+            slug={routePath.replace("/blog/", "")}
+            onBack={() => navigateTo("/blog")}
+          />
         )}
         
         {/* TAB 2: KATALOG */}
@@ -1125,10 +1235,10 @@ const finalTotal = useMemo(() => {
         cartTotal={cartTotal}
         ecoMetrics={ecoMetrics}
         renderAddressDetails={renderAddressDetails}
-
+        clearCart={clearCartState}
         discountAmount={discountAmount}
-promoDiscount={promoDiscount}
-finalTotal={finalTotal}
+        promoDiscount={promoDiscount}
+        finalTotal={finalTotal}
       />
 
       {/* 8. FOOTER */}

@@ -14,7 +14,8 @@ import {
   LogOut,
   LogIn,
   ChevronRight,
-  Sparkles
+  Sparkles,
+  Newspaper,
 } from "lucide-react";
 
 export default function Navbar({
@@ -300,6 +301,29 @@ useEffect(() => {
             </button>
             
             <button
+              onClick={() => handleTabChange("blog")}
+              className={`hover:text-accent-ochre transition-colors relative py-1 flex items-center gap-1.5 ${currentTab === "blog" || currentTab === "blog-detail" ? "text-accent-ochre font-bold" : "text-stone-200"}`}
+            >
+              <Newspaper className="w-4 h-4" />
+              <span>Edukasi</span>
+              {(currentTab === "blog" || currentTab === "blog-detail") && (
+                <motion.div
+                  layoutId="navIndicator"
+                  className="
+                    absolute
+                    -bottom-1
+                    left-1/2
+                    -translate-x-1/2
+                    w-7
+                    h-[2px]
+                    rounded-full
+                    bg-accent-ochre
+                  "
+                />
+              )}
+            </button>
+
+            <button
               onClick={() => handleTabChange("tentang")}
               className={`hover:text-accent-ochre transition-colors relative py-1 flex items-center gap-1.5 ${currentTab === "tentang" ? "text-accent-ochre font-bold" : "text-stone-200"}`}
             >
@@ -478,17 +502,34 @@ useEffect(() => {
                           </button>
 
                           {isAdmin && (
-                                <button
-                                  onClick={onOpenAdminDashboard}
-                                  className="
-                                    w-full flex items-center gap-3 px-5 py-4
-                                    hover:bg-emerald-50 hover:pl-6 transition-all duration-200
-                                    text-sm
-                                  "
-                                >
-                                  <Sparkles className="w-4 h-4" />
-                                  Dashboard Admin
-                                </button>
+                                <>
+                                  <button
+                                    onClick={onOpenAdminDashboard}
+                                    className="
+                                      w-full flex items-center gap-3 px-5 py-4
+                                      hover:bg-emerald-50 hover:pl-6 transition-all duration-200
+                                      text-sm
+                                    "
+                                  >
+                                    <Sparkles className="w-4 h-4" />
+                                    Dashboard Admin
+                                  </button>
+
+                                  <button
+                                    onClick={() => {
+                                      handleTabChange("admin-articles");
+                                      setShowUserMenu(false);
+                                    }}
+                                    className="
+                                      w-full flex items-center gap-3 px-5 py-4
+                                      hover:bg-emerald-50 hover:pl-6 transition-all duration-200
+                                      text-sm
+                                    "
+                                  >
+                                    <Newspaper className="w-4 h-4" />
+                                    Kelola Artikel
+                                  </button>
+                                </>
                               )}
 
                           <button
@@ -871,6 +912,39 @@ useEffect(() => {
                 animate="show"
 
                 onClick={() => {
+                  handleTabChange("blog");
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`
+                  flex
+                  items-center
+                  justify-between
+                  w-full
+                  px-4
+                  py-3
+                  rounded-2xl
+                  transition-all
+                    ${
+                      currentTab==="blog" || currentTab === "blog-detail"
+                      ? "bg-accent-ochre text-white shadow-lg"
+                      : "bg-white/5 text-white hover:bg-white/10 hover:translate-x-2 duration-200"
+                    }
+                `}
+               >
+                <div className="flex items-center gap-3">
+                    <Newspaper className="w-5 h-5"/>
+                    <span>Edukasi / Blog</span>
+                </div>
+                <ChevronRight className="w-4 h-4 opacity-60"/>
+               </motion.button>
+
+               <motion.button
+                custom={3}
+                variants={menuItemVariants}
+                initial="hidden"
+                animate="show"
+
+                onClick={() => {
                   handleTabChange("tentang");
                   setIsMobileMenuOpen(false);
                 }}
@@ -898,7 +972,7 @@ useEffect(() => {
                </motion.button>
                 
                <motion.button
-                custom={3}
+                custom={4}
                 variants={menuItemVariants}
                 initial="hidden"
                 animate="show"
@@ -958,23 +1032,43 @@ useEffect(() => {
                 )}
 
                 {user && isAdmin && (
-                  <motion.button
-                    custom={4}
-                    variants={menuItemVariants}
-                    initial="hidden"
-                    animate="show"
-                    onClick={() => {
-                      onOpenAdminDashboard();
-                      setIsMobileMenuOpen(false);
-                    }}
-                    className="flex items-center justify-between w-full px-4 py-3 rounded-2xl bg-white/5 text-white hover:bg-white/10 hover:translate-x-2 duration-200 transition-all"
-                  >
-                    <div className="flex items-center gap-3">
-                      <Sparkles className="w-5 h-5" />
-                      <span>Dashboard Admin</span>
-                    </div>
-                    <ChevronRight className="w-4 h-4 opacity-60" />
-                  </motion.button>
+                  <>
+                    <motion.button
+                      custom={4}
+                      variants={menuItemVariants}
+                      initial="hidden"
+                      animate="show"
+                      onClick={() => {
+                        onOpenAdminDashboard();
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className="flex items-center justify-between w-full px-4 py-3 rounded-2xl bg-white/5 text-white hover:bg-white/10 hover:translate-x-2 duration-200 transition-all"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Sparkles className="w-5 h-5" />
+                        <span>Dashboard Admin</span>
+                      </div>
+                      <ChevronRight className="w-4 h-4 opacity-60" />
+                    </motion.button>
+
+                    <motion.button
+                      custom={5}
+                      variants={menuItemVariants}
+                      initial="hidden"
+                      animate="show"
+                      onClick={() => {
+                        handleTabChange("admin-articles");
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className="flex items-center justify-between w-full px-4 py-3 rounded-2xl bg-white/5 text-white hover:bg-white/10 hover:translate-x-2 duration-200 transition-all"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Newspaper className="w-5 h-5" />
+                        <span>Kelola Artikel</span>
+                      </div>
+                      <ChevronRight className="w-4 h-4 opacity-60" />
+                    </motion.button>
+                  </>
                 )}
 
                 {user && (

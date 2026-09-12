@@ -204,9 +204,23 @@ export function CartProvider({ children, triggerToast }) {
     setIsCartOpen(true);
   };
 
+  const clearCart = async () => {
+    setCart([]);
+
+    if (!user) return;
+
+    const cartRef = dbRef(db, `carts/${user.uid}`);
+    try {
+      await dbSet(cartRef, []);
+    } catch (error) {
+      console.error("Error clearing cart from database:", error);
+    }
+  };
+
   const value = {
     cart,
     setCart,
+    clearCart,
     isCartOpen,
     setIsCartOpen,
     cartStep,

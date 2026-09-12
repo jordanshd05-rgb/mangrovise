@@ -22,10 +22,10 @@ export default function CheckoutModal({
     cartTotal,
     ecoMetrics,
     renderAddressDetails,
-
+    clearCart,
     discountAmount,
 promoDiscount,
-finalTotal,
+    finalTotal,
 }) {
 
     const downloadInvoice = () => {
@@ -368,7 +368,10 @@ finalTotal,
                       Unduh Invoice
                     </button>
                     <button
-                      onClick={() => setIsCheckoutModalOpen(false)}
+                      onClick={async () => {
+                        if (clearCart) await clearCart();
+                        setIsCheckoutModalOpen(false);
+                      }}
                       className="flex-1 bg-mangrove-deep text-white font-bold py-3 rounded-xl text-xs hover:opacity-90 transition-all cursor-pointer"
                     >
                       Selesai & Tutup

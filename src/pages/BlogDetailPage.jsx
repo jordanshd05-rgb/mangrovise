@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft, CalendarDays, Clock3, Share2 } from "lucide-react";
+import { useAuth } from "../context/AuthContext.jsx";
+import { addPoints } from "../services/gamificationService.js";
 import { getArticleBySlug } from "../services/articleService.js";
 
 const formatDate = (value) => {
@@ -12,9 +14,10 @@ const formatDate = (value) => {
   }).format(date);
 };
 
-export default function BlogDetailPage({ slug, onBack }) {
+export default function BlogDetailPage({ slug, onBack, onRewardEarned }) {
   const [article, setArticle] = useState(null);
   const [loading, setLoading] = useState(Boolean(slug));
+  const { firebaseUser } = useAuth();
 
   useEffect(() => {
     if (!slug) {
@@ -42,6 +45,36 @@ export default function BlogDetailPage({ slug, onBack }) {
       isMounted = false;
     };
   }, [slug]);
+
+  useEffect(() => {
+    if (!article || !firebaseUser?.uid) return undefined;
+
+    const localStorageKey = `mangrovise_article_reward_${article.id}`;
+    const alreadyAwarded = window.sessionStorage.getItem(localStorageKey) === "true";
+
+    if (alreadyAwarded) return undefined;
+
+    let isCancelled = false;
+
+    const awardArticleReward = async () => {
+      const reward = await addPoints(firebaseUser.uid, "article_read", 30, article.id);
+
+      if (isCancelled) return;
+
+      window.sessionStorage.setItem(localStorageKey, "true");
+      if (typeof onRewardEarned === "function") {
+        onRewardEarned(reward);
+      }
+    };
+
+    awardArticleReward().catch((error) => {
+      console.error("Awarding article read points failed:", error);
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [article, firebaseUser, onRewardEarned]);
 
   const handleShare = async () => {
     if (!article) return;

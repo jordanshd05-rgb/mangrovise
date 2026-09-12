@@ -31,6 +31,9 @@ import ProductDetailModal from "./components/ProductDetailModal";
 import CheckoutModal from "./components/CheckoutModal";
 import LoginModal from "./components/LoginModal";
 import Navbar from "./components/Navbar";
+import GrowthCelebrationModal from "./components/GrowthCelebrationModal.jsx";
+import ChatWidget from "./components/ChatWidget.jsx";
+import { addPoints } from "./services/gamificationService.js";
 const RegisterSeller = lazy(() => import("./pages/RegisterSeller"));
 const SellerDashboard = lazy(() => import("./pages/SellerDashboard"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
@@ -224,6 +227,7 @@ export default function App() {
   const [cartStep, setCartStep] = useState(1);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [logoFailed, setLogoFailed] = useState(false);
+  const [celebrationState, setCelebrationState] = useState({ isOpen: false, stage: "benih", points: 0 });
   const tabScrollTimerRef = useRef(null);
   const paymentTimerRef = useRef(null);
 
@@ -877,6 +881,19 @@ const finalTotal = useMemo(() => {
     await clearCartFromContext();
   };
 
+  const awardPurchasePoints = async (purchaseTotal) => {
+    if (!user?.uid || !purchaseTotal || purchaseTotal <= 0) return null;
+
+    const earnedPoints = Math.max(1, Math.floor(purchaseTotal / 10000));
+    const result = await addPoints(user.uid, "purchase", earnedPoints, `order-${Date.now()}`);
+
+    if (result?.leveledUp) {
+      setCelebrationState({ isOpen: true, stage: result.newStage, points: earnedPoints });
+    }
+
+    return result;
+  };
+
   const handleVerifyPayment = () => {
     if (!user) {
       triggerToast("Sesi Anda habis. Silakan masuk kembali.", "error");
@@ -960,6 +977,7 @@ const finalTotal = useMemo(() => {
 };
           setActiveReceipt(receipt);
           setCheckoutStatus("success");
+          await awardPurchasePoints(finalTotal);
           await clearCartState();
           triggerToast("Pembayaran Berhasil! Pesanan Anda telah tersimpan.", "success");
       } catch (err) {
@@ -1029,6 +1047,7 @@ const finalTotal = useMemo(() => {
         renderLogo={renderLogo}
 
         user={user}
+        userId={user?.uid}
         role={role}
         handleLogout={handleLogout}
 
@@ -1062,6 +1081,13 @@ const finalTotal = useMemo(() => {
         }}
 
         isCheckoutModalOpen={isCheckoutModalOpen}
+      />
+
+      <GrowthCelebrationModal
+        isOpen={celebrationState.isOpen}
+        stage={celebrationState.stage}
+        points={celebrationState.points}
+        onClose={() => setCelebrationState((prev) => ({ ...prev, isOpen: false }))}
       />
 
       {/* APP TABS: BERANDA, KATALOG, TENTANG, IMPACT CALCULATOR, PESANAN */}
@@ -1137,6 +1163,14 @@ const finalTotal = useMemo(() => {
           <BlogDetailPage
             slug={routePath.replace("/blog/", "")}
             onBack={() => navigateTo("/blog")}
+            onRewardEarned={(reward) => {
+              if (!reward || !reward.leveledUp) return;
+              setCelebrationState({
+                isOpen: true,
+                stage: reward.newStage,
+                points: reward.addedPoints,
+              });
+            }}
           />
         )}
         
@@ -1347,7 +1381,10 @@ const finalTotal = useMemo(() => {
             </button>
           </motion.div>}
       </AnimatePresence>
-      
+
+      {/* AI Chat Widget - MangroBot */}
+      <ChatWidget />
+
       {/* Product Detail Modal */}
       <ProductDetailModal
         show={showProductDetail}

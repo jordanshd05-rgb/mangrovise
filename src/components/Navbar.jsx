@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useState, useEffect, useRef } from "react";
+import VirtualTreeWidget from "./VirtualTreeWidget.jsx";
 import {
   House,
   LayoutGrid,
@@ -25,6 +26,7 @@ export default function Navbar({
   renderLogo,
 
   user,
+  userId,
   role,
   handleLogout,
 
@@ -372,7 +374,9 @@ useEffect(() => {
             </button>
           </nav>
 
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center gap-2 md:gap-3">
+            <VirtualTreeWidget userId={userId} />
+
             <button
               onClick={() => setIsCartOpen(true)}
               className="bg-accent-ochre hover:bg-accent-ochre/90 text-white p-2.5 rounded-xl transition-all shadow-md flex items-center justify-center relative group"

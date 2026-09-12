@@ -74,7 +74,7 @@ export default function ChatWidget() {
     try {
       // Panggil AI
       const history = messages.map((m) => ({
-        role: m.role === "assistant" ? "model" : "user",
+        sender: m.role === "assistant" ? "assistant" : "user",
         text: m.text,
       }));
 

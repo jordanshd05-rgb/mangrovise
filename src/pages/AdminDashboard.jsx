@@ -8,9 +8,11 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { onValue, ref as dbRef } from "firebase/database";
-import { BarChart3, Ban, CheckCircle2, ShieldAlert, Store, Trash2 } from "lucide-react";
+import { BarChart3, Ban, CheckCircle2, ShieldAlert, Store, Trash2, TrendingUp, FileText } from "lucide-react";
 import { firestore, db } from "../firebase";
 import { useAuth } from "../context/AuthContext.jsx";
+import WebsiteAnalytics from "../components/admin/WebsiteAnalytics.jsx";
+import AdminArticles from "./admin/AdminArticles.jsx";
 
 const ADMIN_EMAILS = ["admin@mangrovise.store"];
 
@@ -19,7 +21,7 @@ const formatCurrency = (value) =>
 
 export default function AdminDashboard() {
   const { firebaseUser, role, loading: authLoading } = useAuth();
-  const [activeTab, setActiveTab] = useState("stores");
+  const [activeTab, setActiveTab] = useState("analytics");
   const [stores, setStores] = useState([]);
   const [products, setProducts] = useState([]);
   const [orderCount, setOrderCount] = useState(0);
@@ -217,17 +219,23 @@ export default function AdminDashboard() {
       {loading && <p className="rounded-2xl bg-white p-6 text-sm text-stone-500">Memuat data platform...</p>}
 
       <div className="flex flex-wrap gap-2 border-b border-stone-200 pb-2">
+        <button onClick={() => setActiveTab("analytics")} className={`rounded-xl px-4 py-2.5 text-sm font-bold flex items-center gap-2 ${activeTab === "analytics" ? "bg-mangrove-deep text-white" : "text-stone-600 hover:bg-stone-100"}`}>
+          <TrendingUp className="h-4 w-4" />
+          Statistik Website
+        </button>
         <button onClick={() => setActiveTab("stores")} className={`rounded-xl px-4 py-2.5 text-sm font-bold ${activeTab === "stores" ? "bg-mangrove-deep text-white" : "text-stone-600 hover:bg-stone-100"}`}>Kelola Toko</button>
         <button onClick={() => setActiveTab("products")} className={`rounded-xl px-4 py-2.5 text-sm font-bold ${activeTab === "products" ? "bg-mangrove-deep text-white" : "text-stone-600 hover:bg-stone-100"}`}>Moderasi Produk</button>
-        <button
-          onClick={() => window.dispatchEvent(new CustomEvent("nav:open-admin-articles"))}
-          className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700"
-        >
+        <button onClick={() => setActiveTab("articles")} className={`rounded-xl px-4 py-2.5 text-sm font-bold flex items-center gap-2 ${activeTab === "articles" ? "bg-mangrove-deep text-white" : "text-stone-600 hover:bg-stone-100"}`}>
+          <FileText className="h-4 w-4" />
           Kelola Artikel
         </button>
       </div>
 
-      {activeTab === "stores" ? (
+      {activeTab === "analytics" ? (
+        <WebsiteAnalytics />
+      ) : activeTab === "articles" ? (
+        <AdminArticles />
+      ) : activeTab === "stores" ? (
         <div className="space-y-4">
           <div className="flex flex-wrap gap-2">
             {[{ key: "all", label: "Semua", count: stores.length }, { key: "pending", label: "Pending", count: statusCounts.pending }, { key: "active", label: "Active", count: statusCounts.active }, { key: "suspended", label: "Suspended", count: statusCounts.suspended }, { key: "rejected", label: "Rejected", count: statusCounts.rejected }].map((filter) => (

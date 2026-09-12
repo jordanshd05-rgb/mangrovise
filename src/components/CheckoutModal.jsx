@@ -18,6 +18,7 @@ export default function CheckoutModal({
     formatTimer,
     handleVerifyPayment,
     setIsCheckoutModalOpen,
+    onCloseCheckoutModal,
     activeReceipt,
     cartTotal,
     ecoMetrics,
@@ -76,7 +77,11 @@ promoDiscount,
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => {
-                if (checkoutStatus !== "verifying") setIsCheckoutModalOpen(false);
+                if (checkoutStatus !== "verifying" && onCloseCheckoutModal) {
+                  onCloseCheckoutModal();
+                } else if (checkoutStatus !== "verifying") {
+                  setIsCheckoutModalOpen(false);
+                }
               }}
               className="absolute inset-0 bg-stone-950/50 backdrop-blur-sm"
             />
@@ -96,7 +101,13 @@ promoDiscount,
                   <span className="font-serif font-bold text-base">Gerbang Pembayaran QRIS Lestari</span>
                 </div>
                 {checkoutStatus !== "verifying" && <button
-                    onClick={() => setIsCheckoutModalOpen(false)}
+                    onClick={() => {
+                      if (onCloseCheckoutModal) {
+                        onCloseCheckoutModal();
+                      } else {
+                        setIsCheckoutModalOpen(false);
+                      }
+                    }}
                     className="text-stone-400 hover:text-stone-700 p-1.5 rounded-lg hover:bg-stone-100 transition-colors cursor-pointer"
                   >
                     <X className="w-4 h-4" />
@@ -370,7 +381,11 @@ promoDiscount,
                     <button
                       onClick={async () => {
                         if (clearCart) await clearCart();
-                        setIsCheckoutModalOpen(false);
+                        if (onCloseCheckoutModal) {
+                          await onCloseCheckoutModal();
+                        } else {
+                          setIsCheckoutModalOpen(false);
+                        }
                       }}
                       className="flex-1 bg-mangrove-deep text-white font-bold py-3 rounded-xl text-xs hover:opacity-90 transition-all cursor-pointer"
                     >

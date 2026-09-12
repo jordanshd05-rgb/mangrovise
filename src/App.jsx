@@ -25,7 +25,6 @@ import OrderHistory from "./pages/OrderHistory";
 import CatalogPage from "./pages/CatalogPage";
 import BlogPage from "./pages/BlogPage";
 import BlogDetailPage from "./pages/BlogDetailPage";
-import AdminArticles from "./pages/admin/AdminArticles";
 import CartDrawer from "./components/cart/CartDrawer";
 import ProductDetailModal from "./components/ProductDetailModal";
 import CheckoutModal from "./components/CheckoutModal";
@@ -331,7 +330,6 @@ export default function App() {
       else if (nextPath === "/impact") setCurrentTab("impact");
       else if (nextPath === "/blog") setCurrentTab("blog");
       else if (nextPath.startsWith("/blog/")) setCurrentTab("blog-detail");
-      else if (nextPath === "/admin/articles") setCurrentTab("admin-articles");
       else if (nextPath === "/order-history" || nextPath === "/pesanan") setCurrentTab("order-history");
       else if (nextPath === "/user-profile") setCurrentTab("user-profile");
       else if (nextPath === "/admin-dashboard") setCurrentTab("admin-dashboard");
@@ -339,13 +337,8 @@ export default function App() {
       else if (nextPath === "/register-seller") setCurrentTab("register-seller");
     };
 
-    const handleAdminArticlesRoute = () => {
-      navigateTo("/admin/articles");
-    };
-
     syncRouteFromBrowser();
     window.addEventListener("popstate", syncRouteFromBrowser);
-    window.addEventListener("nav:open-admin-articles", handleAdminArticlesRoute);
 
     const scrollTimer = setTimeout(() => {
       window.scrollTo(0, 0);
@@ -354,7 +347,6 @@ export default function App() {
     return () => {
       clearTimeout(scrollTimer);
       window.removeEventListener("popstate", syncRouteFromBrowser);
-      window.removeEventListener("nav:open-admin-articles", handleAdminArticlesRoute);
     };
   }, []);
 
@@ -626,7 +618,6 @@ export default function App() {
       tentang: "/tentang",
       impact: "/impact",
       blog: "/blog",
-      "admin-articles": "/admin/articles",
       "order-history": "/order-history",
       pesanan: "/pesanan",
       "user-profile": "/user-profile",
@@ -689,12 +680,21 @@ export default function App() {
     }
   }, [toast]);
   useEffect(() => {
-    let timer;
-    if (isCheckoutModalOpen && checkoutStatus !== "success" && countdown > 0) {
-      timer = setInterval(() => {
-        setCountdown((prev) => prev - 1);
-      }, 1e3);
+    if (!isCheckoutModalOpen || checkoutStatus === "success" || checkoutStatus === "closed" || checkoutStatus === "verifying") {
+      return undefined;
     }
+
+    if (countdown <= 0) {
+      setCheckoutStatus("closed");
+      setActiveReceipt(null);
+      setIsCheckoutModalOpen(false);
+      return undefined;
+    }
+
+    const timer = setInterval(() => {
+      setCountdown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+
     return () => clearInterval(timer);
   }, [isCheckoutModalOpen, checkoutStatus, countdown]);
   const formatTimer = (seconds) => {
@@ -864,6 +864,11 @@ const finalTotal = useMemo(() => {
       triggerToast("Silakan isi semua bidang Alamat Pengiriman (Nama, No HP, Wilayah, Alamat Lengkap, Kode Pos) terlebih dahulu.", "info");
       return;
     }
+    if (paymentTimerRef.current) {
+      clearTimeout(paymentTimerRef.current);
+      paymentTimerRef.current = null;
+    }
+    setActiveReceipt(null);
     setCountdown(600);
     setCheckoutStatus("pending");
     setIsCheckoutModalOpen(true);
@@ -879,6 +884,18 @@ const finalTotal = useMemo(() => {
       }
     }
     await clearCartFromContext();
+  };
+
+  const closeCheckoutModal = async () => {
+    if (paymentTimerRef.current) {
+      clearTimeout(paymentTimerRef.current);
+      paymentTimerRef.current = null;
+    }
+
+    setCountdown(600);
+    setActiveReceipt(null);
+    setCheckoutStatus("closed");
+    setIsCheckoutModalOpen(false);
   };
 
   const awardPurchasePoints = async (purchaseTotal) => {
@@ -908,83 +925,93 @@ const finalTotal = useMemo(() => {
       clearTimeout(paymentTimerRef.current);
     }
     setCheckoutStatus("verifying");
+
     const orderId = generateOrderId();
     const invoiceNo = "INV/" + new Date().getFullYear() + "/MNG/" + Math.floor(1e5 + Math.random() * 9e5);
     const dateStr = new Date().toLocaleString("id-ID", { hour12: false });
-    const itemsData = checkedItems.map(item => ({
-      productId: item.product.id,
-      name: item.product.name,
-      price: item.product.price,
-      quantity: item.quantity,
-      image: item.product.image
+    const safeShippingAddress = shippingAddress && typeof shippingAddress === "object" ? shippingAddress : {};
+    const safeSubtotal = Number(cartTotal) || 0;
+    const safeDiscount = Number(discountAmount) || 0;
+    const safePromo = Number(promoDiscount) || 0;
+    const safeTotal = Number(finalTotal) || 0;
+    const safeSeedlings = Number(ecoMetrics?.seedlings) || 0;
+    const safeCarbonOffset = Number(ecoMetrics?.carbonOffset) || 0;
+
+    const itemsData = checkedItems.map((item) => ({
+      productId: item?.product?.id || "unknown-product",
+      name: item?.product?.name || "Produk",
+      price: Number(item?.product?.price) || 0,
+      quantity: Number(item?.quantity) || 1,
+      image: item?.product?.image || ""
     }));
+
     const orderData = {
-    orderId,
-    invoiceNo,
+      orderId,
+      invoiceNo,
+      buyerId: user?.uid || "guest-user",
+      buyerEmail: user?.email || "guest@demo.local",
+      buyerName: user?.displayName || user?.email?.split("@")[0] || "Pembeli Mangrovise",
+      items: itemsData,
+      subtotal: safeSubtotal,
+      discount: safeDiscount,
+      promo: safePromo,
+      total: safeTotal,
+      tanggal: dateStr,
+      status: "In Process",
+      alamat: safeShippingAddress,
+      ecoDonation: safeSeedlings,
+      carbonSaved: safeCarbonOffset,
+      created_at: new Date().toISOString(),
+      user_id: user?.uid || "guest-user",
+      tree_count: safeSeedlings,
+      total_price: safeTotal
+    };
 
-    buyerId: user.uid,
-
-    buyerEmail: user.email || "",
-
-    buyerName: user.displayName || user.email?.split("@")[0] || "Pembeli Mangrovise",
-
-    items: itemsData,
-
-    subtotal: cartTotal,
-
-    discount: discountAmount,
-
-    promo: promoDiscount,
-
-    total: finalTotal,
-
-    tanggal: dateStr,
-
-    status: "In Process",
-
-    alamat: shippingAddress,
-
-    ecoDonation: ecoMetrics.seedlings,
-
-    carbonSaved: ecoMetrics.carbonOffset
-};
     paymentTimerRef.current = setTimeout(async () => {
-      const userOrdersRef = dbRef(db, `orders/${user.uid}`);
+      const userOrdersRef = dbRef(db, `orders/${user.uid || "guest-user"}`);
+      const receipt = {
+        invoiceNo,
+        transactionId: orderId,
+        date: dateStr,
+        items: [...checkedItems],
+        subtotal: safeSubtotal,
+        discount: safeDiscount,
+        promo: safePromo,
+        total: safeTotal,
+        alamat: safeShippingAddress,
+        ecoDonation: safeSeedlings,
+        carbonSaved: safeCarbonOffset
+      };
+
       try {
         await dbPush(userOrdersRef, orderData);
-        const profileAddressRef = dbRef(db, `users/${user.uid}/profile/address`);
-        await dbSet(profileAddressRef, shippingAddress);
-
-        const receipt = {
-    invoiceNo,
-    transactionId: orderId,
-    date: dateStr,
-    items: [...checkedItems],
-
-    subtotal: cartTotal,
-
-    discount: discountAmount,
-
-    promo: promoDiscount,
-
-    total: finalTotal,
-
-    alamat: shippingAddress,
-
-    ecoDonation: ecoMetrics.seedlings,
-
-    carbonSaved: ecoMetrics.carbonOffset
-};
-          setActiveReceipt(receipt);
-          setCheckoutStatus("success");
-          await awardPurchasePoints(finalTotal);
-          await clearCartState();
-          triggerToast("Pembayaran Berhasil! Pesanan Anda telah tersimpan.", "success");
+        const profileAddressRef = dbRef(db, `users/${user.uid || "guest-user"}/profile/address`);
+        await dbSet(profileAddressRef, safeShippingAddress);
       } catch (err) {
-          console.error("Firebase database error:", err);
-          triggerToast("Gagal menyimpan pesanan ke database.", "error");
-          setCheckoutStatus("pending");
+        console.error("Database save failed during QRIS simulation, but invoice flow must continue:", err);
+        triggerToast("Sistem database sementara tidak tersedia. Invoice simulasi tetap ditampilkan.", "info");
       }
+
+      if (paymentTimerRef.current) {
+        clearTimeout(paymentTimerRef.current);
+        paymentTimerRef.current = null;
+      }
+
+      setActiveReceipt(receipt);
+      setCheckoutStatus("success");
+      try {
+        await awardPurchasePoints(safeTotal);
+      } catch (pointsErr) {
+        console.error("Award points failed after payment success:", pointsErr);
+      }
+
+      try {
+        await clearCartState();
+      } catch (cartErr) {
+        console.error("Clear cart failed after payment success:", cartErr);
+      }
+
+      triggerToast("Pembayaran Berhasil! Invoice Anda siap ditampilkan.", "success");
     }, 2000);
   };
 
@@ -1143,12 +1170,6 @@ const finalTotal = useMemo(() => {
           </Suspense>
         )}
 
-        {currentTab === "admin-articles" && (
-          <Suspense fallback={pageLoader}>
-            <AdminArticles />
-          </Suspense>
-        )}
-
         {currentTab === "user-profile" && (
           <Suspense fallback={pageLoader}>
             <UserProfile />
@@ -1265,6 +1286,7 @@ const finalTotal = useMemo(() => {
         formatTimer={formatTimer}
         handleVerifyPayment={handleVerifyPayment}
         setIsCheckoutModalOpen={setIsCheckoutModalOpen}
+        onCloseCheckoutModal={closeCheckoutModal}
         activeReceipt={activeReceipt}
         cartTotal={cartTotal}
         ecoMetrics={ecoMetrics}

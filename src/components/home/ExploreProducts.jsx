@@ -428,8 +428,8 @@ export default function ExploreProducts({
             >
                 <>
                     {visibleProducts.map((product,index)=>(
-                        <motion.div
-                            key={product.id}
+    <motion.div
+        key={`${product.id}-${index}`}
                             custom={direction}
                             initial={false}
                             animate={getCardStyle(index)}

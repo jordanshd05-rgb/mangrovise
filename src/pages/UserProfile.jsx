@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import { updateProfile } from "firebase/auth";
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import { ref as dbRef, set as dbSet } from "firebase/database";
-import { CheckCircle2, UserCircle2 } from "lucide-react";
+import { CheckCircle2, Sprout, UserCircle2 } from "lucide-react";
 import { auth, db, firestore } from "../firebase";
 import { useAuth } from "../context/AuthContext.jsx";
+import VirtualTreeWidget from "../components/VirtualTreeWidget.jsx";
 
 const initialAddress = {
   recipientName: "",
@@ -141,6 +142,12 @@ export default function UserProfile() {
         {message && <p className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700"><CheckCircle2 className="h-4 w-4" />{message}</p>}
         <button type="submit" disabled={saving || loadingAddress} className="rounded-xl bg-mangrove-deep px-6 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60">{saving ? "Menyimpan..." : "Simpan Perubahan"}</button>
       </form>
+
+      {/* Gamifikasi: Virtual Tree Widget */}
+      <section className="rounded-3xl border border-stone-200 bg-white p-6 shadow-sm sm:p-8">
+        <div className="mb-5 flex items-center gap-3"><Sprout className="h-6 w-6 text-accent-ochre" /><h2 className="text-xl font-serif font-bold text-stone-800">Pertumbuhan Pohon Bakau Anda</h2></div>
+        <VirtualTreeWidget userId={firebaseUser?.uid} />
+      </section>
     </section>
   );
 }

@@ -5,13 +5,13 @@ import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyChRWUyNhFlljxtauq4MgB6T-qb9lDkj-8",
-  authDomain: "mangrovise-web.firebaseapp.com",
-  databaseURL: "https://mangrovise-web-default-rtdb.firebaseio.com",
-  projectId: "mangrovise-web",
-  storageBucket: "mangrovise-web.firebasestorage.app",
-  messagingSenderId: "290794881981",
-  appId: "1:290794881981:web:b8765a19d94827d75748d4"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
 const app = initializeApp(firebaseConfig);

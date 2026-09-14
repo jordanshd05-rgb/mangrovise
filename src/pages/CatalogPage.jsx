@@ -16,6 +16,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import ProductSkeleton from "../components/ProductSkeleton.jsx";
 export default function CatalogPage({
   searchQuery,
   setSearchQuery,
@@ -123,8 +124,10 @@ export default function CatalogPage({
 
               {/* PRODUCTS CATALOG GRID */}
               <div className="space-y-8">
-                {productsLoading ? <div className="bg-white rounded-3xl p-12 text-center border border-stone-200/80 space-y-3 flex-1 flex flex-col items-center justify-center">
-                    <p className="text-stone-500 font-semibold">Memuat produk seller...</p>
+                {productsLoading ? <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-3 gap-7">
+                    {[1, 2, 3, 4, 5, 6].map((_, index) => (
+                      <ProductSkeleton key={index} />
+                    ))}
                   </div> : filteredProducts.length === 0 ? <div className="bg-white rounded-3xl p-12 text-center border border-stone-200/80 space-y-3 flex-1 flex flex-col items-center justify-center">
                     <Info className="w-12 h-12 text-stone-300" />
                     <p className="text-stone-850 font-bold">Produk Tidak Ditemukan</p>

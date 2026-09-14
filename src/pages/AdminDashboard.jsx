@@ -139,13 +139,32 @@ export default function AdminDashboard() {
     }
   };
 
-  const visibleStores = storeStatusFilter === "all"
-    ? stores
-    : stores.filter((store) => store.status === storeStatusFilter);
-  const statusCounts = stores.reduce((counts, store) => ({
-    ...counts,
-    [store.status]: (counts[store.status] || 0) + 1,
-  }), { pending: 0, active: 0, suspended: 0, rejected: 0 });
+  const sortStores = (storeList) => {
+  return [...storeList].sort((a, b) => {
+    const aIsPending = a.status === "pending";
+    const bIsPending = b.status === "pending";
+    if (aIsPending && !bIsPending) return -1;
+    if (!aIsPending && bIsPending) return 1;
+
+    const aTime = a.createdAt?.toDate?.() ?? new Date(a.createdAt || 0);
+    const bTime = b.createdAt?.toDate?.() ?? new Date(b.createdAt || 0);
+    return bTime - aTime;
+  });
+};
+
+const filterByTab = (storeList, filterKey) => {
+  if (filterKey === "all") return storeList;
+  if (filterKey === "pending") return storeList.filter((s) => s.status === "pending");
+  if (filterKey === "approved") return storeList.filter((s) => s.status === "active");
+  if (filterKey === "rejected") return storeList.filter((s) => s.status === "rejected" || s.status === "suspended");
+  return storeList;
+};
+
+const visibleStores = sortStores(filterByTab(stores, storeStatusFilter));
+const statusCounts = stores.reduce((counts, store) => ({
+  ...counts,
+  [store.status]: (counts[store.status] || 0) + 1,
+}), { pending: 0, active: 0, suspended: 0, rejected: 0 });
 
   const statusLabel = {
     pending: "Pending",
@@ -238,7 +257,7 @@ export default function AdminDashboard() {
       ) : activeTab === "stores" ? (
         <div className="space-y-4">
           <div className="flex flex-wrap gap-2">
-            {[{ key: "all", label: "Semua", count: stores.length }, { key: "pending", label: "Pending", count: statusCounts.pending }, { key: "active", label: "Active", count: statusCounts.active }, { key: "suspended", label: "Suspended", count: statusCounts.suspended }, { key: "rejected", label: "Rejected", count: statusCounts.rejected }].map((filter) => (
+            {[{ key: "all", label: "Semua", count: stores.length }, { key: "pending", label: "Menunggu Persetujuan", count: statusCounts.pending }, { key: "approved", label: "Toko Disetujui", count: statusCounts.active }, { key: "rejected", label: "Ditolak/Dibatasi", count: statusCounts.rejected + statusCounts.suspended }].map((filter) => (
               <button key={filter.key} onClick={() => setStoreStatusFilter(filter.key)} className={`rounded-full px-3 py-2 text-xs font-bold ${storeStatusFilter === filter.key ? "bg-mangrove-deep text-white" : "border border-stone-200 bg-white text-stone-600 hover:bg-stone-50"}`}>
                 {filter.label} <span className="ml-1 opacity-70">{filter.count}</span>
               </button>

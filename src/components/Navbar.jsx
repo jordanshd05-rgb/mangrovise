@@ -375,7 +375,9 @@ useEffect(() => {
           </nav>
 
           <div className="flex items-center gap-2 md:gap-3">
-            <VirtualTreeWidget userId={userId} />
+            <div className="hidden md:flex">
+              <VirtualTreeWidget userId={userId} />
+            </div>
 
             <button
               onClick={() => setIsCartOpen(true)}
@@ -782,7 +784,14 @@ useEffect(() => {
                 </div>
               </div>
 
-             <div className="px-6 pt-6 pb-10"> 
+              {/* Mobile point widget */}
+              <div className="px-6 pb-4 mb-5">
+                <div className="md:hidden">
+                  <VirtualTreeWidget userId={userId} />
+                </div>
+              </div>
+
+             <div className="px-6 pt-6 pb-10">
               {user && (
                   <div className="mb-5">
                       <div
